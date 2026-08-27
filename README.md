@@ -17,6 +17,10 @@ Ya hay varios proyectos de voz para Claude Code, pero casi todos apuntan a macOS
 - **Modo activo (`active`):** el modelo mismo dice una frase corta y natural, en el mismo turno — sin archivos, sin demora extra de una llamada aparte. Es el que más natural y rápido suena, pero la primera vez que se usa en una sesión, Claude Code te va a pedir permiso para correr el comando (ver la sección de Instalación más abajo para saltear ese cartel de una vez si querés).
 - Detecta automáticamente una voz instalada que coincida con el idioma de tu sistema (en vez de venir fija en un idioma). Se puede cambiar a mano.
 - Términos de programación comunes (`git`, `commit`, `config`, `hook`, `function`, y unos 80 más) se pronuncian correctamente en inglés aunque estén en medio de una oración en otro idioma, usando la misma voz de siempre — no una segunda voz que corta la frase.
+- Los nombres de archivo con extensión (`common.ps1`, `config.json`) se leen bien — el punto antes de la extensión se dice como "punto", en vez de sonar como una pausa rara cortada a la mitad.
+- Si tenés dos sesiones de Claude Code con el plugin activo hablando al mismo tiempo (por ejemplo, dos ventanas abiertas), ya no se superponen — se turnan automáticamente en vez de sonar las dos juntas e ininteligibles.
+- **`/sapi-voice-kit:mute`:** apaga toda lectura automática al toque, en todas tus sesiones de esta máquina a la vez, sin perder el modo que tenías elegido — para el caso de dos sesiones hablando encima una de la otra, o cualquier momento en que necesitás silencio ya. Pedir que se lea algo puntual sigue funcionando igual mientras está muteado.
+- **Lectura a demanda:** en cualquier momento podés pedir "leeme eso" o "no entendí, léelo" y se lee la respuesta puntual que señalás, sin depender de que el modo automático esté prendido.
 
 ## Instalación
 
@@ -55,6 +59,8 @@ Comandos disponibles:
 | `/sapi-voice-kit:mode summary` | Lee un resumen condensado (~20s más lento por respuesta) |
 | `/sapi-voice-kit:mode active` | El modelo dice una frase corta él mismo, en el momento (puede pedir permiso la primera vez) |
 | `/sapi-voice-kit:debug on` / `off` | Prende o apaga los archivos de log para diagnóstico (apagado por defecto) |
+| `/sapi-voice-kit:mute on` / `off` | Apaga o reactiva toda lectura automática, en todas tus sesiones de esta máquina, sin perder el modo elegido |
+| `/sapi-voice-kit:read-last` (o simplemente pedirlo: "leeme eso") | Lee en voz alta una respuesta puntual, ahora mismo, aunque esté muteado o el modo automático no esté prendido |
 
 ### Sobre el permiso del modo `active`
 
@@ -78,6 +84,8 @@ Cuando te aparezca el cartel, elegí "permitir siempre" para no verlo de nuevo e
 
 Los archivos de log (`log-speak.txt`, y una copia del último texto leído en `last-text.txt`) **solo existen si vos los pedís explícitamente** con `/sapi-voice-kit:debug on`, para diagnosticar un problema puntual. Incluso con eso prendido, cada log tiene un tope de tamaño (se recorta solo a las últimas 200 líneas) — no crece para siempre. Se recomienda volver a apagarlo (`/sapi-voice-kit:debug off`) una vez resuelto lo que sea que estabas viendo.
 
+`/sapi-voice-kit:mute` y la lectura a demanda no agregan ningún archivo nuevo: el mute es un valor más adentro del mismo `config.json` que ya se guardaba, y la lectura a demanda toma el texto que ya está en la conversación y lo pasa directo por memoria a la síntesis de voz — igual que el modo `active`, nunca toca disco.
+
 ## Arquitectura: qué instala, dónde, y qué archivos toca
 
 ### Todo lo que el plugin pone en tu disco — dos carpetas, nada más
@@ -94,7 +102,7 @@ Cuando instalás el plugin, Claude Code crea **exactamente dos carpetas**, las d
    ```
    %USERPROFILE%\.claude\plugins\data\sapi-voice-kit-sapi-voice-kit\
    ```
-   Ahí vive **un solo archivo por defecto**, `config.json`, con la voz/idioma/modo/velocidad que elegiste — y ni siquiera ese archivo existe hasta que corrés `/sapi-voice-kit:voice` o `/sapi-voice-kit:mode` por primera vez. Si activás `/sapi-voice-kit:debug on`, ahí también aparecen `log-speak.txt`, `log-say.txt` y `last-text.txt` — ver la sección de Privacidad más arriba para el detalle de cuándo y por qué.
+   Ahí vive **un solo archivo por defecto**, `config.json`, con la voz/idioma/modo/velocidad/muteo que elegiste — y ni siquiera ese archivo existe hasta que corrés `/sapi-voice-kit:voice`, `/sapi-voice-kit:mode` o `/sapi-voice-kit:mute` por primera vez. Si activás `/sapi-voice-kit:debug on`, ahí también aparecen `log-speak.txt`, `log-say.txt` y `last-text.txt` — ver la sección de Privacidad más arriba para el detalle de cuándo y por qué.
 
 ### ¿Usa alguna carpeta temporal? No — ninguna, en ningún modo
 
