@@ -34,7 +34,7 @@ try {
     # byte-for-byte unmodified. Found and verified by a peer session
     # reviewing this file before it shipped.
     $instructions = @"
-Active voice mode is on: nothing gets read aloud automatically this turn - the usual automatic reader is off. At the very end of your turn, after any tool calls, run this exact command yourself (as a normal command), replacing PARAPHRASE with a short, natural, complete-enough spoken version of your response, in the same language as your response, no markdown. This text is only ever spoken aloud, never shown on screen: if you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud:
+Active voice mode is on: nothing gets read aloud automatically this turn - the usual automatic reader is off. At the very end of your turn, after any tool calls, run this exact command yourself (as a normal command), replacing PARAPHRASE with a short, natural, complete-enough spoken version of your response, in the same language as your response, no markdown. This text is only ever spoken aloud, never shown on screen: if you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud. If you'd mention a URL/link, don't write it out - refer to it naturally instead (e.g. "el link que te dejé arriba") and let the user look at the screen for the actual address, since a raw URL read aloud (the "https://" part especially) sounds wrong:
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "$sayScript" -PluginData "$PluginData" <<'EOF'
 PARAPHRASE

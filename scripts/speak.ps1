@@ -50,6 +50,7 @@ function Get-CleanedText {
     $Text = $Text -replace '(?s)```.*?```', ' code block omitted. '
     $Text = $Text -replace '(?s)<!--.*?-->', ''                    # stray HTML comments, if any
     $Text = $Text -replace '\[([^\]]+)\]\([^\)]+\)', '$1'          # [text](link) -> text
+    $Text = ConvertTo-SpokenUrls -Text $Text                        # any URL left bare (not in markdown link syntax)
     $Text = $Text -replace '(?m)^\s{0,3}[-*+]\s+', ''               # list bullets
     $Text = $Text -replace '(?m)^\s{0,3}\d+\.\s+', ''                # numbered lists
     $Text = $Text -replace '(?m)^\s{0,3}#{1,6}\s*', ''               # headings
