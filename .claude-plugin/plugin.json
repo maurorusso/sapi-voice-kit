@@ -1,8 +1,11 @@
 {
   "name": "sapi-voice-kit",
   "description": "Reads Claude Code's responses aloud using Windows' native voice synthesis (SAPI via System.Speech) — no API keys, no Python, no external installers.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "author": {
     "name": "maurorusso"
-  }
+  },
+  "homepage": "https://github.com/maurorusso/sapi-voice-kit",
+  "repository": "https://github.com/maurorusso/sapi-voice-kit",
+  "license": "MIT"
 }
