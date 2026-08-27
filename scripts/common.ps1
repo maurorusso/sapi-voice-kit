@@ -1,5 +1,18 @@
 ﻿# Shared functions for the plugin's scripts: read/save the voice config, and a small logger.
 
+# Shared instruction for any prompt that asks the model to write text meant
+# only to be heard, never shown on screen (Get-AiSummary's prompt below, and
+# active mode's per-turn instruction in prompt-active-mode.ps1). Kept in ONE
+# place because it used to be duplicated near-verbatim in those two files
+# plus skills/read-last/SKILL.md, and every wording tweak needed all three
+# edited in sync (caught in review - it happened more than once in this
+# project's history). SKILL.md still has its own copy: a skill's
+# instructions are static markdown read directly by the model, there's no
+# way to interpolate a PowerShell variable into it - so that one file still
+# needs a manual sync if this wording changes, but the two PowerShell-side
+# copies no longer can drift from each other.
+$script:SpokenTextGuidance = 'If you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud (for example write "common punto pe ese uno", not "common.ps1"). If you would mention a URL or link, do not write it out - refer to it by its site name instead (e.g. "el link de GitHub") so two different links in the same response are still told apart, and let the reader look at the screen for the actual address, since a raw URL read aloud (the "https://" part especially) sounds wrong. Same idea for a full file path (e.g. "C:\Users\...\common.ps1" or "scripts/common.ps1") - just say the file name, not every folder in between.'
+
 function Get-ConfigPath {
     param([Parameter(Mandatory)][string]$PluginData)
     if (-not (Test-Path $PluginData)) {
@@ -180,26 +193,155 @@ $script:TechPronunciations = @{
 # $Dictionary (case-insensitive) - see $script:TechPronunciations above.
 # Returns $null when there were no matches, so the caller can fall back to
 # a plain Speak(string) call instead of the extra PromptBuilder overhead.
+# File names read oddly aloud: SAPI's text-normalization front end doesn't
+# treat a "." between two word characters ("common.ps1") as reliably as a
+# person would - it can swallow it into an odd pause instead of reading it as
+# part of the name. Scoped to a maintained list of known extensions (not
+# every dot) specifically to avoid mangling real sentence-ending periods.
+# " punto " (not "dot") because this project's spoken output is Spanish by
+# default (see README) - same choice already made throughout the plugin.
+#
+# Shared (not just speak.ps1's problem): natural/literal go through
+# Get-CleanedText, a mechanical step with no model involved, so a regex is a
+# complete fix there. summary/active/read-last instead ask the *model* to
+# write "punto" itself (that text is never shown on screen, so there's no
+# cost to phrasing it however sounds best spoken) - but a written instruction
+# is not a guarantee the model follows it every time. Calling this same
+# function in say.ps1 right before speaking closes that gap: a no-op if the
+# model already wrote "punto" (no literal dot left to match), a real fix if
+# it didn't.
+#
+# Deliberately excludes 'c', 'h', and 'go': those are also ordinary short
+# words/letters ("la opción c", "vamos", a single initial) that are far more
+# likely to show up right after a period than as this project's file
+# extension, and a false match only costs an odd extra "punto" - not worth
+# the trade for these three specifically. Every other entry here is
+# extension-shaped enough (or Spanish/English word-unlike enough - 'rb',
+# 'sh', 'cpp', 'hpp'...) that a stray match is unlikely enough to be worth it.
+$script:KnownFileExtensions = @(
+    'ps1', 'ps1xml', 'psm1', 'psd1', 'json', 'md', 'markdown', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
+    'py', 'html', 'htm', 'css', 'scss', 'less', 'yml', 'yaml', 'txt', 'csv', 'tsv', 'xml', 'sh', 'bash',
+    'cfg', 'ini', 'conf', 'log', 'env', 'lock', 'toml', 'sql', 'rb', 'rs', 'java', 'cpp',
+    'hpp', 'php', 'vue', 'svelte', 'pdf', 'zip', 'exe', 'dll', 'bat', 'cmd', 'csproj', 'sln'
+)
+
+function ConvertTo-SpokenFileNames {
+    param([string]$Text)
+    $extPattern = ($script:KnownFileExtensions | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    # (?:[^\s\\/]+[\\/])* consumes any leading path segments - folders, a
+    # Windows drive letter ("C:"), either \ or / as separator - right up to
+    # the file name, so a full path ("C:\Desarrollos\...\common.ps1" or
+    # "scripts/common.ps1") collapses to just "common punto ps1" instead of
+    # also reading every folder in between. Same reasoning as URLs below:
+    # research (couldn't find one canonical rule for this - TTS engines each
+    # build their own domain-specific normalization for paths/dates/URLs
+    # rather than relying on default behavior) confirms there's no single
+    # "correct" way, so this follows the same "say what matters, not the
+    # full technical string" call already made for URLs and markdown links.
+    return [regex]::Replace($Text, "(?:[^\s\\/]+[\\/])*([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Catches what ConvertTo-SpokenFileNames can't: a path with no recognized
+# extension at the end - a bare folder mention ("C:\Desarrollos\IA"), or a
+# file with an extension not in the list above. Scoped specifically to a
+# Windows drive-letter-absolute path ("C:\...") since that prefix alone is
+# an unambiguous, essentially false-positive-free signal (nothing in normal
+# prose looks like "C:\") - collapses it to just its last segment, the same
+# way a full file path collapses to just the file name above.
+function ConvertTo-SpokenPaths {
+    param([string]$Text)
+    return [regex]::Replace($Text, '[A-Za-z]:[\\/](?:[^\s\\/]+[\\/])*([^\s\\/]+)', '$1')
+}
+
+# URLs read badly aloud, and not just because they're long and full of
+# punctuation: "https://..." starts with a colon immediately followed by a
+# slash, a sequence some TTS engines' text normalization recognizes as the
+# ":/" emoticon (a "confused"/displeased face) before ever getting to
+# recognizing it's a URL - observed live (a spoken response reading a plain
+# https:// link came out announcing an emoticon instead of the link).
+# Simplest fix, and consistent with how markdown links already work here
+# (the [text](url) regex below speaks the label, never the URL): don't speak
+# raw URLs at all. The screen still shows the exact link untouched - this
+# only changes what gets read aloud, same principle as every other cleanup
+# step in this file.
+function ConvertTo-SpokenUrls {
+    param([string]$Text)
+    # "el link" alone doesn't distinguish two different links in the same
+    # response (raised by a reviewer, not urgent then - worth doing since
+    # it's cheap). Says the domain's brand name instead: from the host,
+    # drop "www.", split on ".", and take the second-to-last label
+    # (github.com -> github; docs.github.com -> github, ignoring the
+    # subdomain). Doesn't handle multi-part TLDs like .co.uk correctly
+    # (would say "co" instead of the real name) - not worth the extra
+    # complexity for links this project's own responses realistically
+    # contain (mostly GitHub).
+    $evaluator = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m)
+        $hostName = $m.Groups[1].Value
+        $parts = $hostName -split '\.'
+        $brand = if ($parts.Count -ge 2) { $parts[$parts.Count - 2] } else { $parts[0] }
+        return "el link de $brand"
+    }
+    return [regex]::Replace($Text, 'https?://(?:www\.)?([^/\s]+)\S*', $evaluator)
+}
+
 function Get-PronunciationPrompt {
     param(
         [Parameter(Mandatory)][string]$Text,
-        [Parameter(Mandatory)][hashtable]$Dictionary
+        [Parameter(Mandatory)][hashtable]$Dictionary,
+        [System.Globalization.CultureInfo]$Culture
     )
 
-    $pattern = '\b(' + (($Dictionary.Keys | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b'
-    $matches = [regex]::Matches($Text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    if ($matches.Count -eq 0) { return $null }
+    # Tokenizes $Text once with a fixed-cost pattern ('\w+' - independent of
+    # $Dictionary's size), then does an O(1) hashtable lookup per token -
+    # instead of building one big alternation regex out of every dictionary
+    # key and matching THAT against the text (what this used to do). Same
+    # matching semantics (word-boundary, case-insensitive exact match), same
+    # output - just decouples matching cost from dictionary size. Measured
+    # why this matters, and why it isn't urgent: at this dictionary's real
+    # size (82 entries) the old approach took ~1.6ms/call; a synthetic 20x
+    # larger dictionary (1640 entries) took ~15ms/call - a real, measurable
+    # scaling relationship, but still negligible next to the several seconds
+    # Speak() itself takes. This dictionary is curated tech vocabulary, not
+    # a general-language dictionary (see the CLAUDE.md note on why importing
+    # one of those was rejected) - it will never reasonably reach a size
+    # where that mattered. This change removes the ceiling anyway, for free,
+    # with identical behavior - cheap insurance, not a fix for an active
+    # problem.
+    #
+    # Caveat this introduced (flagged in review): $Dictionary keys must be
+    # single words. The old alternation regex could in principle match a
+    # multi-word key ("pull request") as a phrase; tokenizing by '\w+'
+    # splits on the space first, so a multi-word key would silently never
+    # match. Not a bug today - every entry in $script:TechPronunciations is
+    # one word - but a real constraint for whoever adds the next one.
+    $tokenMatches = [regex]::Matches($Text, '\w+')
+    if ($tokenMatches.Count -eq 0) { return $null }
 
-    $prompt = New-Object System.Speech.Synthesis.PromptBuilder
+    $prompt = $null
     $lastEnd = 0
-    foreach ($m in $matches) {
+    foreach ($m in $tokenMatches) {
+        $key = $m.Value.ToLowerInvariant()
+        if (-not $Dictionary.ContainsKey($key)) { continue }
+        # PromptBuilder() with no arguments defaults to the *machine's*
+        # current language-culture setting (Microsoft's own documented
+        # behavior), not necessarily the culture of the voice actually
+        # selected - and even when the two look like the same value, using
+        # the parameterless constructor produced audibly wrong stress on
+        # unrelated Spanish words elsewhere in the same prompt (confirmed
+        # live: "corregi" stressed on the wrong syllable). Passing the
+        # voice's own Culture explicitly fixed it - confirmed live, same
+        # text, same voice, only this constructor call changed.
+        if (-not $prompt) {
+            $prompt = if ($Culture) { New-Object System.Speech.Synthesis.PromptBuilder($Culture) } else { New-Object System.Speech.Synthesis.PromptBuilder }
+        }
         if ($m.Index -gt $lastEnd) {
             $prompt.AppendText($Text.Substring($lastEnd, $m.Index - $lastEnd))
         }
-        $pronunciation = $Dictionary[$m.Value.ToLowerInvariant()]
-        $prompt.AppendTextWithPronunciation($m.Value, $pronunciation)
+        $prompt.AppendTextWithPronunciation($m.Value, $Dictionary[$key])
         $lastEnd = $m.Index + $m.Length
     }
+    if (-not $prompt) { return $null }
     if ($lastEnd -lt $Text.Length) {
         $prompt.AppendText($Text.Substring($lastEnd))
     }
@@ -229,15 +371,55 @@ function Invoke-SpeechSynthesis {
     $synth.Rate = ConvertTo-SafeRate -Value $Config.rate
     & $Log "rate: $($synth.Rate)"
 
-    $prompt = if ($UsePronunciation) { Get-PronunciationPrompt -Text $Text -Dictionary $script:TechPronunciations } else { $null }
-    if ($prompt) {
-        & $Log "calling Speak() with pronunciation hints (same voice throughout)"
-        $synth.Speak($prompt)
-    } else {
-        & $Log "calling Speak() (no known technical terms to hint)"
-        $synth.Speak($Text)
+    $prompt = if ($UsePronunciation) { Get-PronunciationPrompt -Text $Text -Dictionary $script:TechPronunciations -Culture $synth.Voice.Culture } else { $null }
+
+    # Cross-process mutex: each plugin process (this session's Stop hook,
+    # another parallel session's Stop hook, active mode's say.ps1, ...) gets
+    # its own SpeechSynthesizer with no knowledge of any other process. Two
+    # sessions speaking at once produced genuinely overlapping, unintelligible
+    # audio on the shared output device (observed live: two parallel Claude
+    # Code sessions with this plugin active). A named Mutex serializes actual
+    # speech across every process on the machine that uses this function -
+    # whoever gets here first speaks, the rest wait their turn instead of
+    # talking over each other. WaitOne has a timeout so a process that died
+    # while holding the mutex (or one that's just taking unusually long)
+    # can't permanently silence everyone else - after 60s, speak anyway
+    # rather than staying silent forever. AbandonedMutexException is caught
+    # and treated as "got it" (that's .NET's normal way of reporting a
+    # previous holder exited without releasing - the mutex is still valid).
+    # Local\ (session-scoped), not Global\: the actual problem this solves -
+    # two Claude Code sessions on the same desktop, same Windows login -
+    # never crosses a session boundary, and Global\ requires a privilege
+    # (SeCreateGlobalPrivilege) a restricted or Remote-Desktop-session user
+    # may not have. Local\ needs no special privilege and is sufficient for
+    # the real scenario, so there's no reason to ask for the broader one.
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\SapiVoiceKitSpeak')
+    $acquired = $false
+    try {
+        try {
+            $acquired = $mutex.WaitOne(60000)
+        } catch [System.Threading.AbandonedMutexException] {
+            $acquired = $true
+            & $Log "previous holder of the speech mutex exited without releasing it - continuing anyway"
+        }
+        if (-not $acquired) {
+            & $Log "timed out waiting 60s for another process to finish speaking - speaking anyway instead of staying silent"
+        } else {
+            & $Log "acquired cross-process speech mutex"
+        }
+
+        if ($prompt) {
+            & $Log "calling Speak() with pronunciation hints (same voice throughout)"
+            $synth.Speak($prompt)
+        } else {
+            & $Log "calling Speak() (no known technical terms to hint)"
+            $synth.Speak($Text)
+        }
+        & $Log "Speak() finished OK"
+    } finally {
+        if ($acquired) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
     }
-    & $Log "Speak() finished OK"
 }
 
 # "summary" mode only: asks Claude itself for a short spoken-style summary
@@ -254,7 +436,7 @@ function Invoke-SpeechSynthesis {
 function Get-AiSummary {
     param([string]$Text)
 
-    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no markdown, no quotation marks around it, nothing else.`n`n---`n`n$Text"
+    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly. $($script:SpokenTextGuidance) Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
 
     try {
         # [Console]::OutputEncoding controls how PowerShell decodes bytes

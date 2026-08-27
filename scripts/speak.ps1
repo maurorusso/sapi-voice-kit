@@ -43,9 +43,17 @@ function Get-CleanedText {
     $enDash = [char]0x2013
     $ellipsis = [char]0x2026
 
+    # ConvertTo-SpokenFileNames (common.ps1): "C:\...\common.ps1" or
+    # "scripts/common.ps1" -> "common punto ps1" (drops the path, fixes the
+    # dot). ConvertTo-SpokenPaths catches what that one can't: a bare folder
+    # mention with no recognized extension at the end.
+    $Text = ConvertTo-SpokenFileNames -Text $Text
+    $Text = ConvertTo-SpokenPaths -Text $Text
+
     $Text = $Text -replace '(?s)```.*?```', ' code block omitted. '
     $Text = $Text -replace '(?s)<!--.*?-->', ''                    # stray HTML comments, if any
     $Text = $Text -replace '\[([^\]]+)\]\([^\)]+\)', '$1'          # [text](link) -> text
+    $Text = ConvertTo-SpokenUrls -Text $Text                        # any URL left bare (not in markdown link syntax)
     $Text = $Text -replace '(?m)^\s{0,3}[-*+]\s+', ''               # list bullets
     $Text = $Text -replace '(?m)^\s{0,3}\d+\.\s+', ''                # numbered lists
     $Text = $Text -replace '(?m)^\s{0,3}#{1,6}\s*', ''               # headings
@@ -89,11 +97,21 @@ try {
     # stdin picks up the console's OEM codepage (e.g. 850), not UTF-8 — and
     # Claude Code sends the hook JSON as UTF-8, so accented characters got
     # corrupted.
+    #
+    # Read fully before checking $muted (below) so stdin is always drained,
+    # even when muted - whatever invoked this script may be doing a blocking
+    # write of the full payload and not expect the child to exit before
+    # reading any of it.
     $inputStream = [Console]::OpenStandardInput()
     $buffer = New-Object System.IO.MemoryStream
     $inputStream.CopyTo($buffer)
     $bytes = $buffer.ToArray()
     & $Log "stdin: $($bytes.Length) bytes"
+
+    if ($config -and $config.muted -eq $true) {
+        & $Log "muted, exiting"
+        exit 0
+    }
     if ($bytes.Length -eq 0) { & $Log "empty stdin, exiting"; exit 0 }
     $json = [System.Text.Encoding]::UTF8.GetString($bytes)
 
