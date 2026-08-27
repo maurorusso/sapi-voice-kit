@@ -48,6 +48,7 @@ try {
     # no-op if the model already wrote "punto" (no literal dot pattern left
     # to match), a real fix if it didn't.
     $text = ConvertTo-SpokenFileNames -Text $text
+    $text = ConvertTo-SpokenPaths -Text $text
     $text = ConvertTo-SpokenUrls -Text $text
 
     if ($debugOn) {

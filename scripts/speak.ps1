@@ -43,9 +43,12 @@ function Get-CleanedText {
     $enDash = [char]0x2013
     $ellipsis = [char]0x2026
 
-    # ConvertTo-SpokenFileNames (common.ps1): "common.ps1" -> "common punto ps1"
-    # so the dot doesn't read as an odd swallowed pause.
+    # ConvertTo-SpokenFileNames (common.ps1): "C:\...\common.ps1" or
+    # "scripts/common.ps1" -> "common punto ps1" (drops the path, fixes the
+    # dot). ConvertTo-SpokenPaths catches what that one can't: a bare folder
+    # mention with no recognized extension at the end.
     $Text = ConvertTo-SpokenFileNames -Text $Text
+    $Text = ConvertTo-SpokenPaths -Text $Text
 
     $Text = $Text -replace '(?s)```.*?```', ' code block omitted. '
     $Text = $Text -replace '(?s)<!--.*?-->', ''                    # stray HTML comments, if any

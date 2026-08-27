@@ -215,7 +215,29 @@ $script:KnownFileExtensions = @(
 function ConvertTo-SpokenFileNames {
     param([string]$Text)
     $extPattern = ($script:KnownFileExtensions | ForEach-Object { [regex]::Escape($_) }) -join '|'
-    return [regex]::Replace($Text, "\b([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    # (?:[^\s\\/]+[\\/])* consumes any leading path segments - folders, a
+    # Windows drive letter ("C:"), either \ or / as separator - right up to
+    # the file name, so a full path ("C:\Desarrollos\...\common.ps1" or
+    # "scripts/common.ps1") collapses to just "common punto ps1" instead of
+    # also reading every folder in between. Same reasoning as URLs below:
+    # research (couldn't find one canonical rule for this - TTS engines each
+    # build their own domain-specific normalization for paths/dates/URLs
+    # rather than relying on default behavior) confirms there's no single
+    # "correct" way, so this follows the same "say what matters, not the
+    # full technical string" call already made for URLs and markdown links.
+    return [regex]::Replace($Text, "(?:[^\s\\/]+[\\/])*([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Catches what ConvertTo-SpokenFileNames can't: a path with no recognized
+# extension at the end - a bare folder mention ("C:\Desarrollos\IA"), or a
+# file with an extension not in the list above. Scoped specifically to a
+# Windows drive-letter-absolute path ("C:\...") since that prefix alone is
+# an unambiguous, essentially false-positive-free signal (nothing in normal
+# prose looks like "C:\") - collapses it to just its last segment, the same
+# way a full file path collapses to just the file name above.
+function ConvertTo-SpokenPaths {
+    param([string]$Text)
+    return [regex]::Replace($Text, '[A-Za-z]:[\\/](?:[^\s\\/]+[\\/])*([^\s\\/]+)', '$1')
 }
 
 # URLs read badly aloud, and not just because they're long and full of
@@ -348,7 +370,7 @@ function Invoke-SpeechSynthesis {
 function Get-AiSummary {
     param([string]$Text)
 
-    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). If you'd mention a URL/link, don't write it out - just refer to it naturally (e.g. 'el link que te dejé', 'the link above') and let the reader look at the screen for the actual address, since a raw URL read character-by-character (and the 'https://' part specifically) sounds wrong spoken aloud. Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
+    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). If you'd mention a URL/link, don't write it out - just refer to it naturally (e.g. 'el link que te dejé', 'the link above') and let the reader look at the screen for the actual address, since a raw URL read character-by-character (and the 'https://' part specifically) sounds wrong spoken aloud. Same idea for a full file path (e.g. 'C:\Users\...\common.ps1' or 'scripts/common.ps1') - just say the file name ('common punto pe ese uno'), not every folder in between. Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
 
     try {
         # [Console]::OutputEncoding controls how PowerShell decodes bytes
