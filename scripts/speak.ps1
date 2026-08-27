@@ -84,6 +84,11 @@ function Get-CleanedText {
 try {
     & $Log "starting. PluginData=[$PluginData]"
 
+    if ($config -and $config.muted -eq $true) {
+        & $Log "muted, exiting without reading stdin"
+        exit 0
+    }
+
     # Raw stdin bytes are read instead of [Console]::In.ReadToEnd(): that
     # method decodes using [Console]::InputEncoding, which for redirected
     # stdin picks up the console's OEM codepage (e.g. 850), not UTF-8 — and

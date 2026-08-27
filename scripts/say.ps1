@@ -1,11 +1,13 @@
-﻿# Model-invoked (active mode only): reads short text piped via stdin and
-# speaks it immediately, during the same turn - no file, no waiting for the
-# Stop hook, no separate AI call. Only meant to run when config.mode is
-# "active" - prompt-active-mode.ps1 is what tells the model to call this,
-# and in that mode speak.ps1 (the Stop hook) skips speaking entirely so
-# the two mechanisms never overlap and produce double audio.
+﻿# Model-invoked: reads short text piped via stdin and speaks it immediately -
+# no file, no waiting for the Stop hook, no separate AI call. Two callers:
+# - prompt-active-mode.ps1's instruction, every turn, when config.mode is
+#   "active" (speak.ps1, the Stop hook, skips speaking entirely in that mode
+#   so the two mechanisms never overlap and produce double audio).
+# - the "read this" skill, on demand, whenever the user explicitly asks to
+#   hear something read - passes -Force so an explicit request still works
+#   even while muted (mute only silences the automatic per-turn reading).
 
-param([string]$PluginData)
+param([string]$PluginData, [switch]$Force)
 
 . "$PSScriptRoot\common.ps1"
 
@@ -14,7 +16,12 @@ $debugOn = $config -and $config.debug -eq $true
 $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -FileName "log-say.txt"
 
 try {
-    & $Log "starting (active mode, model-invoked)"
+    & $Log "starting (Force=[$Force])"
+
+    if (-not $Force -and $config -and $config.muted -eq $true) {
+        & $Log "muted and not forced, exiting without reading stdin"
+        exit 0
+    }
 
     # Same raw-byte UTF8 stdin read as speak.ps1 - avoids the OEM-codepage
     # decoding bug (see speak.ps1's comments for the full explanation).

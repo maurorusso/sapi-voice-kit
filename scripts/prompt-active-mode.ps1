@@ -13,6 +13,7 @@ param([string]$PluginData, [string]$PluginRoot)
 
 try {
     $config = if ($PluginData) { Get-VoiceConfig -PluginData $PluginData } else { $null }
+    if ($config -and $config.muted -eq $true) { exit 0 }
     $mode = if ($config -and $config.mode) { $config.mode } else { 'natural' }
     if ($mode -ne 'active') { exit 0 }
 
@@ -33,7 +34,7 @@ try {
     # byte-for-byte unmodified. Found and verified by a peer session
     # reviewing this file before it shipped.
     $instructions = @"
-Active voice mode is on: nothing gets read aloud automatically this turn - the usual automatic reader is off. At the very end of your turn, after any tool calls, run this exact command yourself (as a normal command), replacing PARAPHRASE with a short, natural, complete-enough spoken version of your response, in the same language as your response, no markdown:
+Active voice mode is on: nothing gets read aloud automatically this turn - the usual automatic reader is off. At the very end of your turn, after any tool calls, run this exact command yourself (as a normal command), replacing PARAPHRASE with a short, natural, complete-enough spoken version of your response, in the same language as your response, no markdown. This text is only ever spoken aloud, never shown on screen: if you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud:
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "$sayScript" -PluginData "$PluginData" <<'EOF'
 PARAPHRASE
