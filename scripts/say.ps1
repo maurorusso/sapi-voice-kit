@@ -18,17 +18,22 @@ $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -F
 try {
     & $Log "starting (Force=[$Force])"
 
-    if (-not $Force -and $config -and $config.muted -eq $true) {
-        & $Log "muted and not forced, exiting without reading stdin"
-        exit 0
-    }
-
     # Same raw-byte UTF8 stdin read as speak.ps1 - avoids the OEM-codepage
     # decoding bug (see speak.ps1's comments for the full explanation).
+    #
+    # Read fully before checking $muted (below) so stdin is always drained,
+    # even when muted and not forced - whatever invoked this script may be
+    # doing a blocking write of the full payload and not expect the child to
+    # exit before reading any of it.
     $inputStream = [Console]::OpenStandardInput()
     $buffer = New-Object System.IO.MemoryStream
     $inputStream.CopyTo($buffer)
     $bytes = $buffer.ToArray()
+
+    if (-not $Force -and $config -and $config.muted -eq $true) {
+        & $Log "muted and not forced, exiting"
+        exit 0
+    }
     if ($bytes.Length -eq 0) { & $Log "empty stdin, nothing to say"; exit 0 }
     $text = [System.Text.Encoding]::UTF8.GetString($bytes).Trim()
     if (-not $text) { & $Log "blank text, nothing to say"; exit 0 }

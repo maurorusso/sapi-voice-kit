@@ -197,10 +197,18 @@ $script:TechPronunciations = @{
 # function in say.ps1 right before speaking closes that gap: a no-op if the
 # model already wrote "punto" (no literal dot left to match), a real fix if
 # it didn't.
+#
+# Deliberately excludes 'c', 'h', and 'go': those are also ordinary short
+# words/letters ("la opción c", "vamos", a single initial) that are far more
+# likely to show up right after a period than as this project's file
+# extension, and a false match only costs an odd extra "punto" - not worth
+# the trade for these three specifically. Every other entry here is
+# extension-shaped enough (or Spanish/English word-unlike enough - 'rb',
+# 'sh', 'cpp', 'hpp'...) that a stray match is unlikely enough to be worth it.
 $script:KnownFileExtensions = @(
     'ps1', 'ps1xml', 'psm1', 'psd1', 'json', 'md', 'markdown', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
     'py', 'html', 'htm', 'css', 'scss', 'less', 'yml', 'yaml', 'txt', 'csv', 'tsv', 'xml', 'sh', 'bash',
-    'cfg', 'ini', 'conf', 'log', 'env', 'lock', 'toml', 'sql', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h',
+    'cfg', 'ini', 'conf', 'log', 'env', 'lock', 'toml', 'sql', 'rb', 'rs', 'java', 'cpp',
     'hpp', 'php', 'vue', 'svelte', 'pdf', 'zip', 'exe', 'dll', 'bat', 'cmd', 'csproj', 'sln'
 )
 

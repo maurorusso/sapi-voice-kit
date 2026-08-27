@@ -88,21 +88,26 @@ function Get-CleanedText {
 try {
     & $Log "starting. PluginData=[$PluginData]"
 
-    if ($config -and $config.muted -eq $true) {
-        & $Log "muted, exiting without reading stdin"
-        exit 0
-    }
-
     # Raw stdin bytes are read instead of [Console]::In.ReadToEnd(): that
     # method decodes using [Console]::InputEncoding, which for redirected
     # stdin picks up the console's OEM codepage (e.g. 850), not UTF-8 — and
     # Claude Code sends the hook JSON as UTF-8, so accented characters got
     # corrupted.
+    #
+    # Read fully before checking $muted (below) so stdin is always drained,
+    # even when muted - whatever invoked this script may be doing a blocking
+    # write of the full payload and not expect the child to exit before
+    # reading any of it.
     $inputStream = [Console]::OpenStandardInput()
     $buffer = New-Object System.IO.MemoryStream
     $inputStream.CopyTo($buffer)
     $bytes = $buffer.ToArray()
     & $Log "stdin: $($bytes.Length) bytes"
+
+    if ($config -and $config.muted -eq $true) {
+        & $Log "muted, exiting"
+        exit 0
+    }
     if ($bytes.Length -eq 0) { & $Log "empty stdin, exiting"; exit 0 }
     $json = [System.Text.Encoding]::UTF8.GetString($bytes)
 
