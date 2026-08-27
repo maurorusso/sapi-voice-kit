@@ -295,6 +295,13 @@ function Get-PronunciationPrompt {
     # where that mattered. This change removes the ceiling anyway, for free,
     # with identical behavior - cheap insurance, not a fix for an active
     # problem.
+    #
+    # Caveat this introduced (flagged in review): $Dictionary keys must be
+    # single words. The old alternation regex could in principle match a
+    # multi-word key ("pull request") as a phrase; tokenizing by '\w+'
+    # splits on the space first, so a multi-word key would silently never
+    # match. Not a bug today - every entry in $script:TechPronunciations is
+    # one word - but a real constraint for whoever adds the next one.
     $tokenMatches = [regex]::Matches($Text, '\w+')
     if ($tokenMatches.Count -eq 0) { return $null }
 
