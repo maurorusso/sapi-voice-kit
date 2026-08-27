@@ -17,7 +17,8 @@ Ya hay varios proyectos de voz para Claude Code, pero casi todos apuntan a macOS
 - **Modo activo (`active`):** el modelo mismo dice una frase corta y natural, en el mismo turno — sin archivos, sin demora extra de una llamada aparte. Es el que más natural y rápido suena, pero la primera vez que se usa en una sesión, Claude Code te va a pedir permiso para correr el comando (ver la sección de Instalación más abajo para saltear ese cartel de una vez si querés).
 - Detecta automáticamente una voz instalada que coincida con el idioma de tu sistema (en vez de venir fija en un idioma). Se puede cambiar a mano.
 - Términos de programación comunes (`git`, `commit`, `config`, `hook`, `function`, y unos 80 más) se pronuncian correctamente en inglés aunque estén en medio de una oración en otro idioma, usando la misma voz de siempre — no una segunda voz que corta la frase.
-- Los nombres de archivo con extensión (`common.ps1`, `config.json`) se leen bien — el punto antes de la extensión se dice como "punto", en vez de sonar como una pausa rara cortada a la mitad.
+- Los nombres de archivo con extensión (`common.ps1`, `config.json`) se leen bien — el punto antes de la extensión se dice como "punto", en vez de sonar como una pausa rara cortada a la mitad. Lo mismo con rutas completas (`C:\...\common.ps1` o `scripts/speak.ps1`): se lee solo el nombre del archivo, no cada carpeta intermedia.
+- Los links no se leen crudos — algunos motores de voz de Windows llegan a leer una URL como si fuera un emoticón (confirmado en vivo) por el `://` justo después de "https". En vez de eso, se dice simplemente "el link" — la pantalla sigue mostrando la dirección completa.
 - Si tenés dos sesiones de Claude Code con el plugin activo hablando al mismo tiempo (por ejemplo, dos ventanas abiertas), ya no se superponen — se turnan automáticamente en vez de sonar las dos juntas e ininteligibles.
 - **`/sapi-voice-kit:mute`:** apaga toda lectura automática al toque, en todas tus sesiones de esta máquina a la vez, sin perder el modo que tenías elegido — para el caso de dos sesiones hablando encima una de la otra, o cualquier momento en que necesitás silencio ya. Pedir que se lea algo puntual sigue funcionando igual mientras está muteado.
 - **Lectura a demanda:** en cualquier momento podés pedir "leeme eso" o "no entendí, léelo" y se lee la respuesta puntual que señalás, sin depender de que el modo automático esté prendido.
@@ -103,6 +104,8 @@ Cuando instalás el plugin, Claude Code crea **exactamente dos carpetas**, las d
    %USERPROFILE%\.claude\plugins\data\sapi-voice-kit-sapi-voice-kit\
    ```
    Ahí vive **un solo archivo por defecto**, `config.json`, con la voz/idioma/modo/velocidad/muteo que elegiste — y ni siquiera ese archivo existe hasta que corrés `/sapi-voice-kit:voice`, `/sapi-voice-kit:mode` o `/sapi-voice-kit:mute` por primera vez. Si activás `/sapi-voice-kit:debug on`, ahí también aparecen `log-speak.txt`, `log-say.txt` y `last-text.txt` — ver la sección de Privacidad más arriba para el detalle de cuándo y por qué.
+
+**Nota sobre estas dos rutas en Claude Desktop:** lo de arriba es lo confirmado para una sesión de terminal (`claude` en una consola). En Claude Desktop (panel "Code"), se observó una estructura distinta: el código en `%USERPROFILE%\.claude\plugins\cache\sapi-voice-kit\sapi-voice-kit\<versión>\` y los datos en `%USERPROFILE%\.claude\plugins\data\sapi-voice-kit-inline\`. Mismo contenido, misma privacidad — solo cambia la carpeta exacta según qué cliente de Claude Code estés usando. Investigar por qué difiere queda pendiente.
 
 ### ¿Usa alguna carpeta temporal? No — ninguna, en ningún modo
 
