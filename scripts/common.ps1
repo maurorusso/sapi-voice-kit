@@ -1,5 +1,18 @@
 ﻿# Shared functions for the plugin's scripts: read/save the voice config, and a small logger.
 
+# Shared instruction for any prompt that asks the model to write text meant
+# only to be heard, never shown on screen (Get-AiSummary's prompt below, and
+# active mode's per-turn instruction in prompt-active-mode.ps1). Kept in ONE
+# place because it used to be duplicated near-verbatim in those two files
+# plus skills/read-last/SKILL.md, and every wording tweak needed all three
+# edited in sync (caught in review - it happened more than once in this
+# project's history). SKILL.md still has its own copy: a skill's
+# instructions are static markdown read directly by the model, there's no
+# way to interpolate a PowerShell variable into it - so that one file still
+# needs a manual sync if this wording changes, but the two PowerShell-side
+# copies no longer can drift from each other.
+$script:SpokenTextGuidance = 'If you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud (for example write "common punto pe ese uno", not "common.ps1"). If you would mention a URL or link, do not write it out - refer to it by its site name instead (e.g. "el link de GitHub") so two different links in the same response are still told apart, and let the reader look at the screen for the actual address, since a raw URL read aloud (the "https://" part especially) sounds wrong. Same idea for a full file path (e.g. "C:\Users\...\common.ps1" or "scripts/common.ps1") - just say the file name, not every folder in between.'
+
 function Get-ConfigPath {
     param([Parameter(Mandatory)][string]$PluginData)
     if (-not (Test-Path $PluginData)) {
@@ -423,7 +436,7 @@ function Invoke-SpeechSynthesis {
 function Get-AiSummary {
     param([string]$Text)
 
-    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). If you'd mention a URL/link, don't write it out - refer to it by its site name instead (e.g. 'el link de GitHub', 'the GitHub link') so two different links in the same response are still told apart, and let the reader look at the screen for the actual address, since a raw URL read character-by-character (and the 'https://' part specifically) sounds wrong spoken aloud. Same idea for a full file path (e.g. 'C:\Users\...\common.ps1' or 'scripts/common.ps1') - just say the file name ('common punto pe ese uno'), not every folder in between. Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
+    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly. $($script:SpokenTextGuidance) Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
 
     try {
         # [Console]::OutputEncoding controls how PowerShell decodes bytes
