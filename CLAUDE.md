@@ -35,7 +35,8 @@ sapi-voice-kit/
 │   ├── mute/SKILL.md          # /sapi-voice-kit:mute
 │   └── read-last/SKILL.md     # model-invocable: read a specific response on demand
 ├── LICENSE (MIT)
-└── README.md
+├── README.md
+└── ARCHITECTURE.md           # per-mode component diagrams, moved out of README.md to keep that one user-facing
 ```
 
 ## The four reading modes
