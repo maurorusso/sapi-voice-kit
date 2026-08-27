@@ -253,7 +253,23 @@ function ConvertTo-SpokenPaths {
 # step in this file.
 function ConvertTo-SpokenUrls {
     param([string]$Text)
-    return [regex]::Replace($Text, 'https?://\S+', 'el link')
+    # "el link" alone doesn't distinguish two different links in the same
+    # response (raised by a reviewer, not urgent then - worth doing since
+    # it's cheap). Says the domain's brand name instead: from the host,
+    # drop "www.", split on ".", and take the second-to-last label
+    # (github.com -> github; docs.github.com -> github, ignoring the
+    # subdomain). Doesn't handle multi-part TLDs like .co.uk correctly
+    # (would say "co" instead of the real name) - not worth the extra
+    # complexity for links this project's own responses realistically
+    # contain (mostly GitHub).
+    $evaluator = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m)
+        $hostName = $m.Groups[1].Value
+        $parts = $hostName -split '\.'
+        $brand = if ($parts.Count -ge 2) { $parts[$parts.Count - 2] } else { $parts[0] }
+        return "el link de $brand"
+    }
+    return [regex]::Replace($Text, 'https?://(?:www\.)?([^/\s]+)\S*', $evaluator)
 }
 
 function Get-PronunciationPrompt {
@@ -400,7 +416,7 @@ function Invoke-SpeechSynthesis {
 function Get-AiSummary {
     param([string]$Text)
 
-    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). If you'd mention a URL/link, don't write it out - just refer to it naturally (e.g. 'el link que te dejé', 'the link above') and let the reader look at the screen for the actual address, since a raw URL read character-by-character (and the 'https://' part specifically) sounds wrong spoken aloud. Same idea for a full file path (e.g. 'C:\Users\...\common.ps1' or 'scripts/common.ps1') - just say the file name ('common punto pe ese uno'), not every folder in between. Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
+    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). If you'd mention a URL/link, don't write it out - refer to it by its site name instead (e.g. 'el link de GitHub', 'the GitHub link') so two different links in the same response are still told apart, and let the reader look at the screen for the actual address, since a raw URL read character-by-character (and the 'https://' part specifically) sounds wrong spoken aloud. Same idea for a full file path (e.g. 'C:\Users\...\common.ps1' or 'scripts/common.ps1') - just say the file name ('common punto pe ese uno'), not every folder in between. Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
 
     try {
         # [Console]::OutputEncoding controls how PowerShell decodes bytes
