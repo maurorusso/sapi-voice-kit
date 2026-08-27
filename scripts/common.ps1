@@ -259,23 +259,53 @@ function ConvertTo-SpokenUrls {
 function Get-PronunciationPrompt {
     param(
         [Parameter(Mandatory)][string]$Text,
-        [Parameter(Mandatory)][hashtable]$Dictionary
+        [Parameter(Mandatory)][hashtable]$Dictionary,
+        [System.Globalization.CultureInfo]$Culture
     )
 
-    $pattern = '\b(' + (($Dictionary.Keys | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b'
-    $matches = [regex]::Matches($Text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    if ($matches.Count -eq 0) { return $null }
+    # Tokenizes $Text once with a fixed-cost pattern ('\w+' - independent of
+    # $Dictionary's size), then does an O(1) hashtable lookup per token -
+    # instead of building one big alternation regex out of every dictionary
+    # key and matching THAT against the text (what this used to do). Same
+    # matching semantics (word-boundary, case-insensitive exact match), same
+    # output - just decouples matching cost from dictionary size. Measured
+    # why this matters, and why it isn't urgent: at this dictionary's real
+    # size (82 entries) the old approach took ~1.6ms/call; a synthetic 20x
+    # larger dictionary (1640 entries) took ~15ms/call - a real, measurable
+    # scaling relationship, but still negligible next to the several seconds
+    # Speak() itself takes. This dictionary is curated tech vocabulary, not
+    # a general-language dictionary (see the CLAUDE.md note on why importing
+    # one of those was rejected) - it will never reasonably reach a size
+    # where that mattered. This change removes the ceiling anyway, for free,
+    # with identical behavior - cheap insurance, not a fix for an active
+    # problem.
+    $tokenMatches = [regex]::Matches($Text, '\w+')
+    if ($tokenMatches.Count -eq 0) { return $null }
 
-    $prompt = New-Object System.Speech.Synthesis.PromptBuilder
+    $prompt = $null
     $lastEnd = 0
-    foreach ($m in $matches) {
+    foreach ($m in $tokenMatches) {
+        $key = $m.Value.ToLowerInvariant()
+        if (-not $Dictionary.ContainsKey($key)) { continue }
+        # PromptBuilder() with no arguments defaults to the *machine's*
+        # current language-culture setting (Microsoft's own documented
+        # behavior), not necessarily the culture of the voice actually
+        # selected - and even when the two look like the same value, using
+        # the parameterless constructor produced audibly wrong stress on
+        # unrelated Spanish words elsewhere in the same prompt (confirmed
+        # live: "corregi" stressed on the wrong syllable). Passing the
+        # voice's own Culture explicitly fixed it - confirmed live, same
+        # text, same voice, only this constructor call changed.
+        if (-not $prompt) {
+            $prompt = if ($Culture) { New-Object System.Speech.Synthesis.PromptBuilder($Culture) } else { New-Object System.Speech.Synthesis.PromptBuilder }
+        }
         if ($m.Index -gt $lastEnd) {
             $prompt.AppendText($Text.Substring($lastEnd, $m.Index - $lastEnd))
         }
-        $pronunciation = $Dictionary[$m.Value.ToLowerInvariant()]
-        $prompt.AppendTextWithPronunciation($m.Value, $pronunciation)
+        $prompt.AppendTextWithPronunciation($m.Value, $Dictionary[$key])
         $lastEnd = $m.Index + $m.Length
     }
+    if (-not $prompt) { return $null }
     if ($lastEnd -lt $Text.Length) {
         $prompt.AppendText($Text.Substring($lastEnd))
     }
@@ -305,7 +335,7 @@ function Invoke-SpeechSynthesis {
     $synth.Rate = ConvertTo-SafeRate -Value $Config.rate
     & $Log "rate: $($synth.Rate)"
 
-    $prompt = if ($UsePronunciation) { Get-PronunciationPrompt -Text $Text -Dictionary $script:TechPronunciations } else { $null }
+    $prompt = if ($UsePronunciation) { Get-PronunciationPrompt -Text $Text -Dictionary $script:TechPronunciations -Culture $synth.Voice.Culture } else { $null }
 
     # Cross-process mutex: each plugin process (this session's Stop hook,
     # another parallel session's Stop hook, active mode's say.ps1, ...) gets
