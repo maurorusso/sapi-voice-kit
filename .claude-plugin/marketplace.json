@@ -1,0 +1,23 @@
+{
+  "name": "sapi-voice-kit",
+  "owner": {
+    "name": "maurorusso"
+  },
+  "description": "Marketplace for sapi-voice-kit, a native Windows text-to-speech plugin for Claude Code.",
+  "version": "0.4.1",
+  "plugins": [
+    {
+      "name": "sapi-voice-kit",
+      "source": "./",
+      "displayName": "SAPI Voice Kit",
+      "description": "Reads Claude Code's responses aloud using Windows' native voice synthesis (SAPI), no API keys, no Python, no external installers.",
+      "version": "0.4.1",
+      "author": {
+        "name": "maurorusso"
+      },
+      "license": "MIT",
+      "keywords": ["voice", "tts", "accessibility", "windows", "sapi"],
+      "category": "accessibility"
+    }
+  ]
+}

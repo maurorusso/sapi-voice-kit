@@ -1,0 +1,9 @@
+# OS/editor cruft
+Thumbs.db
+.DS_Store
+*.swp
+
+# Scratch/test files, if anyone runs local tests inside the repo instead of
+# in their own PluginData folder
+*.local.json
+/scratch/

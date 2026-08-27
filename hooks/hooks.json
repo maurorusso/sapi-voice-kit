@@ -1,0 +1,28 @@
+{
+  "description": "Reads each of Claude Code's final responses aloud when the turn ends, using Windows' native voice (SAPI). Natural mode reads the complete response cleaned of markdown; nothing is shortened and nothing is added to the on-screen response. In active mode, the model speaks for itself mid-turn instead (see the UserPromptSubmit hook below).",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\prompt-active-mode.ps1\" -PluginData \"${CLAUDE_PLUGIN_DATA}\" -PluginRoot \"${CLAUDE_PLUGIN_ROOT}\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\speak.ps1\" -PluginData \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 300,
+            "statusMessage": "Reading the response aloud..."
+          }
+        ]
+      }
+    ]
+  }
+}
