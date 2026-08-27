@@ -180,6 +180,36 @@ $script:TechPronunciations = @{
 # $Dictionary (case-insensitive) - see $script:TechPronunciations above.
 # Returns $null when there were no matches, so the caller can fall back to
 # a plain Speak(string) call instead of the extra PromptBuilder overhead.
+# File names read oddly aloud: SAPI's text-normalization front end doesn't
+# treat a "." between two word characters ("common.ps1") as reliably as a
+# person would - it can swallow it into an odd pause instead of reading it as
+# part of the name. Scoped to a maintained list of known extensions (not
+# every dot) specifically to avoid mangling real sentence-ending periods.
+# " punto " (not "dot") because this project's spoken output is Spanish by
+# default (see README) - same choice already made throughout the plugin.
+#
+# Shared (not just speak.ps1's problem): natural/literal go through
+# Get-CleanedText, a mechanical step with no model involved, so a regex is a
+# complete fix there. summary/active/read-last instead ask the *model* to
+# write "punto" itself (that text is never shown on screen, so there's no
+# cost to phrasing it however sounds best spoken) - but a written instruction
+# is not a guarantee the model follows it every time. Calling this same
+# function in say.ps1 right before speaking closes that gap: a no-op if the
+# model already wrote "punto" (no literal dot left to match), a real fix if
+# it didn't.
+$script:KnownFileExtensions = @(
+    'ps1', 'ps1xml', 'psm1', 'psd1', 'json', 'md', 'markdown', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
+    'py', 'html', 'htm', 'css', 'scss', 'less', 'yml', 'yaml', 'txt', 'csv', 'tsv', 'xml', 'sh', 'bash',
+    'cfg', 'ini', 'conf', 'log', 'env', 'lock', 'toml', 'sql', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h',
+    'hpp', 'php', 'vue', 'svelte', 'pdf', 'zip', 'exe', 'dll', 'bat', 'cmd', 'csproj', 'sln'
+)
+
+function ConvertTo-SpokenFileNames {
+    param([string]$Text)
+    $extPattern = ($script:KnownFileExtensions | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    return [regex]::Replace($Text, "\b([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
 function Get-PronunciationPrompt {
     param(
         [Parameter(Mandatory)][string]$Text,
@@ -245,7 +275,13 @@ function Invoke-SpeechSynthesis {
     # rather than staying silent forever. AbandonedMutexException is caught
     # and treated as "got it" (that's .NET's normal way of reporting a
     # previous holder exited without releasing - the mutex is still valid).
-    $mutex = New-Object System.Threading.Mutex($false, 'Global\SapiVoiceKitSpeak')
+    # Local\ (session-scoped), not Global\: the actual problem this solves -
+    # two Claude Code sessions on the same desktop, same Windows login -
+    # never crosses a session boundary, and Global\ requires a privilege
+    # (SeCreateGlobalPrivilege) a restricted or Remote-Desktop-session user
+    # may not have. Local\ needs no special privilege and is sufficient for
+    # the real scenario, so there's no reason to ask for the broader one.
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\SapiVoiceKitSpeak')
     $acquired = $false
     try {
         try {

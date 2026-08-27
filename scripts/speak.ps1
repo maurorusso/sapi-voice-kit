@@ -36,24 +36,6 @@ $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -F
 # switches with this approach. Only covers a curated word list, not
 # arbitrary code identifiers - unlisted words still read with the main
 # voice's normal pronunciation, same as before this existed.
-# File names read oddly aloud: SAPI's text-normalization front end doesn't
-# treat a "." between two word characters ("common.ps1") as reliably as a
-# person would - it can swallow it into an odd pause instead of reading it as
-# part of the name. The IPA dictionary in common.ps1 fixes mispronounced
-# whole words, but that doesn't touch this - it's not a pronunciation
-# problem, it's how the raw character is being interpreted before it ever
-# gets to pronunciation. Scoped to a maintained list of known extensions
-# (not every dot) specifically to avoid mangling real sentence-ending
-# periods. " punto " (not "dot") because this project's spoken output is
-# Spanish by default (see README) - same choice already made throughout
-# this file and the rest of the plugin.
-$script:KnownFileExtensions = @(
-    'ps1', 'ps1xml', 'psm1', 'psd1', 'json', 'md', 'markdown', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
-    'py', 'html', 'htm', 'css', 'scss', 'less', 'yml', 'yaml', 'txt', 'csv', 'tsv', 'xml', 'sh', 'bash',
-    'cfg', 'ini', 'conf', 'log', 'env', 'lock', 'toml', 'sql', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h',
-    'hpp', 'php', 'vue', 'svelte', 'pdf', 'zip', 'exe', 'dll', 'bat', 'cmd', 'csproj', 'sln'
-)
-
 function Get-CleanedText {
     param([string]$Text)
 
@@ -61,8 +43,9 @@ function Get-CleanedText {
     $enDash = [char]0x2013
     $ellipsis = [char]0x2026
 
-    $extPattern = ($script:KnownFileExtensions | ForEach-Object { [regex]::Escape($_) }) -join '|'
-    $Text = [regex]::Replace($Text, "\b([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    # ConvertTo-SpokenFileNames (common.ps1): "common.ps1" -> "common punto ps1"
+    # so the dot doesn't read as an odd swallowed pause.
+    $Text = ConvertTo-SpokenFileNames -Text $Text
 
     $Text = $Text -replace '(?s)```.*?```', ' code block omitted. '
     $Text = $Text -replace '(?s)<!--.*?-->', ''                    # stray HTML comments, if any

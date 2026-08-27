@@ -34,6 +34,16 @@ try {
     if (-not $text) { & $Log "blank text, nothing to say"; exit 0 }
     & $Log "text: $($text.Length) characters"
 
+    # Safety net, not the primary fix: the instructions this script's callers
+    # give the model (prompt-active-mode.ps1, read-last/SKILL.md) already ask
+    # it to write "punto" instead of a literal "." before a file extension -
+    # but that's a written instruction, not a guarantee, and this project
+    # doesn't rely on the model remembering things it's asked to do every
+    # time (see active mode's own known weakness). Idempotent either way: a
+    # no-op if the model already wrote "punto" (no literal dot pattern left
+    # to match), a real fix if it didn't.
+    $text = ConvertTo-SpokenFileNames -Text $text
+
     if ($debugOn) {
         Set-Content -Path (Join-Path $PluginData "last-text.txt") -Value $text -Encoding UTF8
     }
