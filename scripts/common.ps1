@@ -230,14 +230,48 @@ function Invoke-SpeechSynthesis {
     & $Log "rate: $($synth.Rate)"
 
     $prompt = if ($UsePronunciation) { Get-PronunciationPrompt -Text $Text -Dictionary $script:TechPronunciations } else { $null }
-    if ($prompt) {
-        & $Log "calling Speak() with pronunciation hints (same voice throughout)"
-        $synth.Speak($prompt)
-    } else {
-        & $Log "calling Speak() (no known technical terms to hint)"
-        $synth.Speak($Text)
+
+    # Cross-process mutex: each plugin process (this session's Stop hook,
+    # another parallel session's Stop hook, active mode's say.ps1, ...) gets
+    # its own SpeechSynthesizer with no knowledge of any other process. Two
+    # sessions speaking at once produced genuinely overlapping, unintelligible
+    # audio on the shared output device (observed live: two parallel Claude
+    # Code sessions with this plugin active). A named Mutex serializes actual
+    # speech across every process on the machine that uses this function -
+    # whoever gets here first speaks, the rest wait their turn instead of
+    # talking over each other. WaitOne has a timeout so a process that died
+    # while holding the mutex (or one that's just taking unusually long)
+    # can't permanently silence everyone else - after 60s, speak anyway
+    # rather than staying silent forever. AbandonedMutexException is caught
+    # and treated as "got it" (that's .NET's normal way of reporting a
+    # previous holder exited without releasing - the mutex is still valid).
+    $mutex = New-Object System.Threading.Mutex($false, 'Global\SapiVoiceKitSpeak')
+    $acquired = $false
+    try {
+        try {
+            $acquired = $mutex.WaitOne(60000)
+        } catch [System.Threading.AbandonedMutexException] {
+            $acquired = $true
+            & $Log "previous holder of the speech mutex exited without releasing it - continuing anyway"
+        }
+        if (-not $acquired) {
+            & $Log "timed out waiting 60s for another process to finish speaking - speaking anyway instead of staying silent"
+        } else {
+            & $Log "acquired cross-process speech mutex"
+        }
+
+        if ($prompt) {
+            & $Log "calling Speak() with pronunciation hints (same voice throughout)"
+            $synth.Speak($prompt)
+        } else {
+            & $Log "calling Speak() (no known technical terms to hint)"
+            $synth.Speak($Text)
+        }
+        & $Log "Speak() finished OK"
+    } finally {
+        if ($acquired) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
     }
-    & $Log "Speak() finished OK"
 }
 
 # "summary" mode only: asks Claude itself for a short spoken-style summary
@@ -254,7 +288,7 @@ function Invoke-SpeechSynthesis {
 function Get-AiSummary {
     param([string]$Text)
 
-    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no markdown, no quotation marks around it, nothing else.`n`n---`n`n$Text"
+    $prompt = "Summarize the following text in 2-4 natural spoken sentences that capture the key points, in the same language as the text. This summary will ONLY ever be spoken aloud by a text-to-speech engine, never shown on screen - write it accordingly: if you mention a file name, say the word for a period (e.g. 'punto' in Spanish, 'dot' in English) instead of writing a literal '.' character, since a literal period right before a file extension reads oddly aloud (for example write 'common punto pe ese uno', not 'common.ps1'). Avoid markdown, raw symbols, and abbreviations that wouldn't make sense read aloud. Output ONLY the summary itself - no preamble, no options, no alternate phrasings, no quotation marks around it, nothing else.`n`n---`n`n$Text"
 
     try {
         # [Console]::OutputEncoding controls how PowerShell decodes bytes
