@@ -47,15 +47,31 @@ try {
     # time (see active mode's own known weakness). Idempotent either way: a
     # no-op if the model already wrote "punto" (no literal dot pattern left
     # to match), a real fix if it didn't.
+    $text = ConvertTo-SpokenDotfiles -Text $text
     $text = ConvertTo-SpokenFileNames -Text $text
     $text = ConvertTo-SpokenPaths -Text $text
     $text = ConvertTo-SpokenUrls -Text $text
+    $text = ConvertTo-SpokenAbbreviations -Text $text
+
+    # In "active" mode, the CLI's heredoc and Cowork's read_aloud MCP tool
+    # both eventually call this script - if the model ever triggers both in
+    # the same turn (see the function's own comment in common.ps1), this
+    # catches the accidental repeat instead of speaking twice back-to-back.
+    # -Force always bypasses it, in both directions: an explicit "leeme eso"
+    # is never silently swallowed by this check, and it never updates the
+    # marker either - so an on-demand repeat can't cause the *next* turn's
+    # real automatic speech to be wrongly treated as a duplicate of it.
+    if (-not $Force -and $PluginData -and (Test-RecentActiveSpeech -PluginData $PluginData)) {
+        & $Log "recent active-mode speech already happened, skipping"
+        exit 0
+    }
 
     if ($debugOn) {
         Set-Content -Path (Join-Path $PluginData "last-text.txt") -Value $text -Encoding UTF8
     }
 
     Invoke-SpeechSynthesis -Text $text -Config $config -UsePronunciation $true -Log $Log
+    if (-not $Force -and $PluginData) { Set-RecentSpeechMarker -PluginData $PluginData }
 } catch {
     & $Log "EXCEPTION: $($_.Exception.GetType().Name): $($_.Exception.Message)"
     exit 0

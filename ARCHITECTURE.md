@@ -63,6 +63,10 @@ El único de los cuatro que sale de tu máquina hacia una llamada de Claude — 
 
 ### Modo `active`
 
+Un solo modo, la misma idea (el modelo dice una frase corta él mismo, en el momento) — pero con dos caminos distintos según dónde estés corriendo, porque **Claude Cowork/Desktop no dispara ningún hook de plugin** (confirmado contra varios issues abiertos del repo de Claude Code). En la CLI, un hook se lo recuerda al modelo cada turno; en Cowork, no hay hook equivalente, así que una skill cumple ese rol en su lugar.
+
+**En la CLI:**
+
 ```mermaid
 flowchart TD
     A(["Empieza tu turno"]) --> B["Hook UserPromptSubmit se dispara:<br/>prompt-active-mode.ps1"]
@@ -81,4 +85,24 @@ flowchart TD
     class E extra
 ```
 
-El más rápido de los cuatro (nada de esperar a una llamada aparte), pero el único que le pide permiso a Claude Code — porque acá el que corre el comando es el modelo mismo, no un hook automático. Fíjate que el hook `Stop` (abajo del diagrama) sigue disparándose igual que en los otros modos, pero se queda quieto a propósito — así nunca se superponen las dos formas de hablar.
+El hook `Stop` (abajo del diagrama) sigue disparándose igual que en los otros modos, pero se queda quieto a propósito — así nunca se superponen las dos formas de hablar.
+
+**En Claude Cowork/Desktop:**
+
+```mermaid
+flowchart TD
+    A(["Empieza tu turno"]) --> B["Skill cowork/SKILL.md se activa:<br/>¿sos Cowork y el modo es active?"]
+    B -->|"no"| Z(["No hace nada<br/>(sos CLI, o el modo no es active)"])
+    B -->|"sí"| C["Redactás una frase corta<br/>y natural para el oído"]
+    C --> D["⚠️ Llamás a la herramienta MCP<br/>read_aloud (servidor local,<br/>primera vez pide tu permiso)"]
+    D --> E["mcp-server/server.js:<br/>pipea el texto a say.ps1<br/>por stdin"]
+    E --> F["say.ps1: Get-PronunciationPrompt +<br/>Invoke-SpeechSynthesis"]
+    F --> G(["System.Speech habla,<br/>ya en el mismo turno"])
+
+    classDef local fill:#d4edda,stroke:#28a745,color:#000
+    classDef extra fill:#fff3cd,stroke:#e0a800,color:#000
+    class B,C,E,F,G,Z local
+    class D extra
+```
+
+Mismo mecanismo que en la CLI (el modelo pipea una frase a `say.ps1`), pero a través de un servidor MCP local en vez de un heredoc de shell — porque acá no hay ningún hook que dispare nada (el `Stop` hook tampoco corre en Cowork, así que no hace falta que se quede quieto a propósito como en la CLI). La diferencia real con la CLI: ahí un hook le recuerda al modelo cada turno sin que dependa de su propio juicio; acá, nada fuerza que la skill se dispare — es una limitación real de Cowork, no algo que este plugin pueda resolver del todo.

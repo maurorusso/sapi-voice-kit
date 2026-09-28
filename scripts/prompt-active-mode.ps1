@@ -4,8 +4,13 @@
 # entirely in this mode - see speak.ps1, so the two never produce double
 # audio). Repeats every turn, not just once, for the same reason
 # request-summary.ps1 used to (the old, now-removed, <!--voice--> design):
-# doesn't depend on the model "remembering" in a long conversation. In any
-# other mode, this does nothing.
+# doesn't depend on the model "remembering" in a long conversation.
+#
+# This hook only ever runs in the CLI - Claude Cowork/Desktop doesn't fire
+# plugin hooks at all, so "active" mode reminds the model there instead via
+# skills/cowork/SKILL.md, calling the read_aloud MCP tool instead of
+# say.ps1 directly. Same mode, same idea, just whichever transport the
+# running client actually supports. In any other mode, this does nothing.
 
 param([string]$PluginData, [string]$PluginRoot)
 

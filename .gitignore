@@ -7,3 +7,7 @@ Thumbs.db
 # in their own PluginData folder
 *.local.json
 /scratch/
+
+# Working plan documents (design/implementation plans reviewed before
+# coding) - local-only on purpose, never meant to ship with the repo
+/plans/
