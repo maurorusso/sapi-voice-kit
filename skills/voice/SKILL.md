@@ -10,8 +10,8 @@ Arguments received: "$ARGUMENTS"
 Steps:
 
 1. If there are no arguments, or the user asks to see the options ("voices", "list", "options"), run:
-   `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/list-voices.ps1"`
-   and show the list as-is.
+   `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/list-voices.ps1" -PluginData "${CLAUDE_PLUGIN_DATA}"`
+   and show the list as-is - it's grouped by engine (OneCore "moderna" voices, which are preferred automatically when one exists for the current language, and classic SAPI5 voices), and ends with a line naming which one is actually in use right now.
 
 2. If the user asks to go back to automatic ("auto", "default"), run:
    `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/set-voice.ps1" -PluginData "${CLAUDE_PLUGIN_DATA}" -Auto`

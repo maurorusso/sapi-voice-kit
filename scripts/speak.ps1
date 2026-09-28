@@ -14,57 +14,10 @@ $config = if ($PluginData) { Get-VoiceConfig -PluginData $PluginData } else { $n
 $debugOn = $config -and $config.debug -eq $true
 $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -FileName "log-speak.txt"
 
-# Strips markdown so it sounds natural instead of reading symbols aloud.
-# Note: this only cleans formatting, it doesn't rewrite the text.
+# Get-CleanedText lives in common.ps1 now (it's shared with
+# scripts/say-test.ps1, the /sapi-voice-kit:test command - both need the
+# exact production cleanup pipeline, not a reimplementation of it).
 #
-# Considered and rejected: switching to a second installed voice for
-# technical terms (filenames/commands, almost always English regardless of
-# the response's language), so they'd be pronounced correctly instead of
-# with the main voice's accent. It technically worked (confirmed live with
-# SpeechSynthesizer's VoiceChange event, and PromptBuilder + StartVoice),
-# but two problems killed it: switching voices roughly doubled the total
-# speaking time on a code-heavy response (measured: 44s vs ~20s for the
-# same text), and - the bigger issue - two different installed voices
-# alternating mid-response sounds like two different people talking, not
-# one voice reading a response.
-#
-# What's used instead: Get-PronunciationPrompt (common.ps1) keeps the ONE
-# main voice for everything, but gives it a correct IPA pronunciation hint
-# for known technical words (git, config, hook, etc.) via
-# PromptBuilder.AppendTextWithPronunciation - no voice change, no extra
-# delay worth mentioning. Confirmed via VoiceChange that the voice never
-# switches with this approach. Only covers a curated word list, not
-# arbitrary code identifiers - unlisted words still read with the main
-# voice's normal pronunciation, same as before this existed.
-function Get-CleanedText {
-    param([string]$Text)
-
-    $emDash = [char]0x2014
-    $enDash = [char]0x2013
-    $ellipsis = [char]0x2026
-
-    # ConvertTo-SpokenFileNames (common.ps1): "C:\...\common.ps1" or
-    # "scripts/common.ps1" -> "common punto ps1" (drops the path, fixes the
-    # dot). ConvertTo-SpokenPaths catches what that one can't: a bare folder
-    # mention with no recognized extension at the end.
-    $Text = ConvertTo-SpokenFileNames -Text $Text
-    $Text = ConvertTo-SpokenPaths -Text $Text
-
-    $Text = $Text -replace '(?s)```.*?```', ' code block omitted. '
-    $Text = $Text -replace '(?s)<!--.*?-->', ''                    # stray HTML comments, if any
-    $Text = $Text -replace '\[([^\]]+)\]\([^\)]+\)', '$1'          # [text](link) -> text
-    $Text = ConvertTo-SpokenUrls -Text $Text                        # any URL left bare (not in markdown link syntax)
-    $Text = $Text -replace '(?m)^\s{0,3}[-*+]\s+', ''               # list bullets
-    $Text = $Text -replace '(?m)^\s{0,3}\d+\.\s+', ''                # numbered lists
-    $Text = $Text -replace '(?m)^\s{0,3}#{1,6}\s*', ''               # headings
-    $Text = $Text -replace '(?m)^\s{0,3}>\s?', ''                    # quotes
-    $Text = $Text -replace '(?m)^\s*[-*_]{3,}\s*$', ' '              # horizontal rules
-    $Text = $Text.Replace([string]$emDash, ', ').Replace([string]$enDash, ', ')
-    $Text = $Text.Replace([string]$ellipsis, '...')
-    $Text = $Text -replace '[*_#`]', ''
-    return $Text.Trim()
-}
-
 # A model-written hidden <!--voice--> summary each turn was tried and
 # rejected before this: a Stop hook only ever sees exactly what's already on
 # screen (last_assistant_message) - there's no hidden channel, so the marker
@@ -84,10 +37,14 @@ function Get-CleanedText {
 #     call fails for any reason, so choosing this mode is never worse than
 #     natural, just sometimes slower.
 #   - active: this hook does nothing at all (see the early exit below) -
-#     the model speaks its own short paraphrase during the turn itself, via
-#     say.ps1 (prompted every turn by prompt-active-mode.ps1). Skipping
-#     here is what keeps this from producing double/overlapping audio with
-#     that mechanism.
+#     the model speaks its own short paraphrase during the turn itself.
+#     In the CLI, that's say.ps1 via a shell heredoc (prompted every turn
+#     by prompt-active-mode.ps1's hook); in Claude Cowork/Desktop, which
+#     doesn't fire plugin hooks at all, it's the read_aloud MCP tool
+#     instead (mcp-server/server.js), reminded by skills/cowork/SKILL.md.
+#     Same mode, same model-speaks-itself idea, two transports depending
+#     on which client is actually running. Skipping here is what keeps
+#     this hook from producing double/overlapping audio with either one.
 
 try {
     & $Log "starting. PluginData=[$PluginData]"
@@ -123,7 +80,12 @@ try {
 
     $mode = if ($config -and $config.mode) { $config.mode } else { 'natural' }
     if ($mode -eq 'active') {
-        & $Log "mode=[active]: the model speaks for itself via say.ps1, nothing to do here"
+        # The model speaks for itself, via say.ps1 (CLI) or the read_aloud
+        # MCP tool (Cowork) - see the header comment above. This hook itself
+        # never runs in Cowork at all (hooks don't fire there), so this
+        # branch only actually matters in the CLI, keeping this hook from
+        # speaking on top of what prompt-active-mode.ps1's reminder triggers.
+        & $Log "mode=[active]: the model speaks for itself, nothing to do here"
         exit 0
     }
 

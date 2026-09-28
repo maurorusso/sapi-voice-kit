@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "sapi-voice-kit": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-server/server.js"],
+      "env": {
+        "PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
+        "PLUGIN_DATA": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  }
+}
