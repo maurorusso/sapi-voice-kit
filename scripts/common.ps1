@@ -13,12 +13,188 @@
 # copies no longer can drift from each other.
 $script:SpokenTextGuidance = 'If you mention a file name, say the word for a period (e.g. "punto" in Spanish, "dot" in English) instead of writing a literal "." character, since a raw dot right before a file extension reads oddly aloud (for example write "common punto pe ese uno", not "common.ps1"). If you would mention a URL or link, do not write it out - refer to it by its site name instead (e.g. "el link de GitHub") so two different links in the same response are still told apart, and let the reader look at the screen for the actual address, since a raw URL read aloud (the "https://" part especially) sounds wrong. Same idea for a full file path (e.g. "C:\Users\...\common.ps1" or "scripts/common.ps1") - just say the file name, not every folder in between.'
 
+# Fixed, shared data directory used by every installation of this plugin on
+# this Windows account - the CLI, Desktop's Code tab, and Cowork each get
+# handed a different, install-specific ${CLAUDE_PLUGIN_DATA} path (their own
+# separate plugin cache folder), so before this, each one read and wrote its
+# own separate config.json. Confirmed live: setting /sapi-voice-kit:mode
+# active from Code left Cowork's read_aloud still reporting "not configured
+# in active mode", because it was reading a config.json that Code's install
+# never touched. One fixed path per Windows user account - independent of
+# whatever $PluginData a given caller was handed - fixes that: every install
+# reads and writes the same file, so a setting changed from any one of them
+# is visible to all of them.
+# Serializes access to config.json across every process on the machine that
+# reads/writes it - same idea, same scope (Local\, not Global\ - see
+# Invoke-SpeechSynthesis's speech mutex below for the full reasoning, which
+# applies identically here), different named mutex so a slow config write
+# never makes a concurrent speech request wait, or vice versa. Added after
+# review surfaced two real races now that config.json is one shared file
+# instead of separate per-install ones: (1) the first-ever migration
+# (Resolve-SharedDataDir, below) had a TOCTOU window - two processes
+# launched close together (e.g. the CLI's first hook firing and Cowork's
+# MCP server starting up around the same time) could each see the shared
+# file as "doesn't exist yet" and each perform their own migration, the
+# second one's plain overwrite silently discarding the first one's; (2)
+# Save-VoiceConfig's read-whole-file/modify/write-whole-file cycle had no
+# lock at all, so two near-simultaneous setting changes (even to different
+# namespaces) could race, with the second writer's full-file snapshot
+# overwriting the first's. A 5s timeout (config reads/writes take
+# milliseconds, unlike speech synthesis) is generous; timing out proceeds
+# anyway rather than going stuck/silent, matching this project's established
+# stance on lock timeouts.
+function Invoke-WithConfigLock {
+    param([Parameter(Mandatory)][scriptblock]$Action)
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\SapiVoiceKitConfig')
+    $acquired = $false
+    try {
+        try {
+            $acquired = $mutex.WaitOne(5000)
+        } catch [System.Threading.AbandonedMutexException] {
+            $acquired = $true
+        }
+        & $Action
+    } finally {
+        if ($acquired) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
+# Shallow PSCustomObject -> hashtable copy - used anywhere a parsed JSON
+# object needs to become an editable hashtable (Read-ConfigRoot below, and
+# Resolve-SharedDataDir's migration step, which both used to do this same
+# one-liner independently - a second reviewer flagged the duplication).
+function ConvertTo-Hashtable {
+    param($InputObject)
+    $result = @{}
+    if ($InputObject) {
+        foreach ($prop in $InputObject.psobject.Properties) { $result[$prop.Name] = $prop.Value }
+    }
+    return $result
+}
+
+# Low-level read/write of the whole config.json object (every namespace),
+# shared by Get-VoiceConfig, Save-VoiceConfig, and Resolve-SharedDataDir's
+# migration step so none of them hand-roll their own copy of this
+# parsing/serialization logic (they used to each write it independently, a
+# real drift risk review caught). Callers are responsible for holding
+# Invoke-WithConfigLock around any read (so it can't observe a write
+# mid-flight) or read-modify-write sequence.
+function Read-ConfigRoot {
+    param([Parameter(Mandatory)][string]$Path)
+    $root = @{}
+    if (Test-Path $Path) {
+        try {
+            $parsed = Get-Content -Path $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($prop in $parsed.psobject.Properties) {
+                $root[$prop.Name] = ConvertTo-Hashtable -InputObject $prop.Value
+            }
+        } catch {
+            $root = @{}
+        }
+    }
+    return $root
+}
+
+function Write-ConfigRoot {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][hashtable]$Root
+    )
+    $Root | ConvertTo-Json -Depth 5 | Set-Content -Path $Path -Encoding UTF8
+}
+
+# Memoized per process: once this process has confirmed the shared
+# directory exists and run its one-time migration check, every later call
+# (Get-ConfigPath/Test-RecentActiveSpeech/Set-RecentSpeechMarker/Get-Logger
+# all route through this) can skip straight to returning the known path
+# instead of re-acquiring the config lock and re-checking the same handful
+# of files again - found live: a single say.ps1 run calls this 3-4 times
+# internally, each one redoing identical, already-settled work.
+$script:SharedDataDirCleanupDone = $false
+
+function Resolve-SharedDataDir {
+    param([Parameter(Mandatory)][string]$PluginData)
+
+    $shared = Join-Path $env:USERPROFILE ".claude\plugins\data\sapi-voice-kit-shared"
+    if ($script:SharedDataDirCleanupDone) { return $shared }
+
+    Invoke-WithConfigLock -Action {
+        if (-not (Test-Path $shared)) {
+            New-Item -ItemType Directory -Path $shared -Force | Out-Null
+        }
+
+        # One-time migration: carry over settings from whichever per-install
+        # folder this particular caller happened to be handed, so an
+        # existing user's mode/voice/mute/debug choices survive the switch
+        # instead of silently resetting to defaults the first time any
+        # install runs after this change. The old config.json (both the
+        # original per-install shape, and the brief flat-shared shape this
+        # plugin used for a short time before namespaces existed) was a
+        # flat object with no "local"/"cowork" split - wrapped under
+        # "local" here, since a setting saved before namespaces existed was,
+        # in effect, always a CLI/Code-tab ("local") setting. Gated on
+        # whether "local" specifically is already populated (not on whether
+        # the shared file/directory merely exists) - both more precise (a
+        # Cowork-only call could have created the shared file first,
+        # populating "cowork" without ever touching "local") and race-safe,
+        # since this whole check now runs under the config lock above.
+        # Skipped entirely if $PluginData already IS the shared path (never
+        # true for any real caller - every actual install is handed its own
+        # distinct per-install cache folder - but guarded explicitly rather
+        # than left merely "unreachable in practice": without this, reading
+        # $oldConfig would read the shared file itself, and a shared file
+        # that already has "cowork" populated but not "local" yet would get
+        # its *entire* current content - "cowork" included - wrongly nested
+        # under a new "local" key, silently destroying the "cowork" section).
+        $sharedConfigPath = Join-Path $shared "config.json"
+        $oldConfig = Join-Path $PluginData "config.json"
+        $configMigratedThisCall = $false
+        if ($PluginData -ne $shared -and (Test-Path $oldConfig)) {
+            try {
+                $root = Read-ConfigRoot -Path $sharedConfigPath
+                if (-not $root.ContainsKey('local')) {
+                    $flat = Get-Content -Path $oldConfig -Raw -Encoding UTF8 | ConvertFrom-Json
+                    $root['local'] = ConvertTo-Hashtable -InputObject $flat
+                    Write-ConfigRoot -Path $sharedConfigPath -Root $root
+                    $configMigratedThisCall = $true
+                }
+            } catch {}
+        }
+
+        # Clean up the per-install leftovers this same plugin wrote to the
+        # old location before this fix existed - but config.json
+        # specifically is only ever deleted here if THIS call just finished
+        # copying it into the shared file above (or it never existed in the
+        # first place). Found live, by this project's own tests: an earlier
+        # version of this cleanup ran unconditionally, including when
+        # $shared already existed because a DIFFERENT install had already
+        # migrated first - that silently deleted a second install's
+        # still-un-migrated config.json before its settings were ever
+        # copied anywhere, a real data-loss bug, not just leftover tidiness.
+        # The other files (double-speak marker, debug logs,
+        # last-spoken-text) never hold settings worth preserving, so
+        # they're always safe to remove regardless of whether config.json
+        # itself was migrated this call.
+        if ($PluginData -ne $shared) {
+            if ($configMigratedThisCall -and (Test-Path $oldConfig)) {
+                try { Remove-Item -Path $oldConfig -Force } catch {}
+            }
+            foreach ($name in @('.last-active-speech', 'last-text.txt', 'log-say.txt', 'log-speak.txt', 'log-say-test.txt')) {
+                $old = Join-Path $PluginData $name
+                if (Test-Path $old) { try { Remove-Item -Path $old -Force } catch {} }
+            }
+        }
+    } | Out-Null
+
+    $script:SharedDataDirCleanupDone = $true
+    return $shared
+}
+
 function Get-ConfigPath {
     param([Parameter(Mandatory)][string]$PluginData)
-    if (-not (Test-Path $PluginData)) {
-        New-Item -ItemType Directory -Path $PluginData -Force | Out-Null
-    }
-    return Join-Path $PluginData "config.json"
+    $dir = Resolve-SharedDataDir -PluginData $PluginData
+    return Join-Path $dir "config.json"
 }
 
 # Guards against speaking twice within a few seconds - can happen in
@@ -51,7 +227,8 @@ function Test-RecentActiveSpeech {
         [Parameter(Mandatory)][string]$PluginData,
         [int]$WindowSeconds = 8
     )
-    $path = Join-Path $PluginData ".last-active-speech"
+    $dir = Resolve-SharedDataDir -PluginData $PluginData
+    $path = Join-Path $dir ".last-active-speech"
     if (-not (Test-Path $path)) { return $false }
     try {
         $lastTicks = [long](Get-Content -Path $path -Raw -Encoding UTF8).Trim()
@@ -71,10 +248,8 @@ function Test-RecentActiveSpeech {
 function Set-RecentSpeechMarker {
     param([Parameter(Mandatory)][string]$PluginData)
     try {
-        if (-not (Test-Path $PluginData)) {
-            New-Item -ItemType Directory -Path $PluginData -Force | Out-Null
-        }
-        $path = Join-Path $PluginData ".last-active-speech"
+        $dir = Resolve-SharedDataDir -PluginData $PluginData
+        $path = Join-Path $dir ".last-active-speech"
         "$((Get-Date).Ticks)" | Set-Content -Path $path -Encoding UTF8
     } catch {
         # Best-effort only - never let a failure to write this marker block
@@ -82,48 +257,67 @@ function Set-RecentSpeechMarker {
     }
 }
 
+# $Namespace splits config.json into independent sections per environment -
+# "local" (everything that reaches this plugin through Claude Code's own
+# hooks: the CLI terminal and Desktop's "Code" tab, indistinguishable to
+# this plugin since both fire the exact same hooks with no signal to tell
+# them apart) and "cowork" (everything that reaches it through the MCP
+# tools in mcp-server/server.js, since Cowork's own shell has no PowerShell
+# and can only get here via MCP). Defaults to "local" so every pre-existing
+# .ps1 caller that doesn't pass it keeps working unchanged. Without this
+# split, a shared flat file forced CLI/Code and Cowork to always have the
+# identical voice/mode - reverted after the user asked for the different
+# voice per environment back.
 function Get-VoiceConfig {
-    param([Parameter(Mandatory)][string]$PluginData)
+    param(
+        [Parameter(Mandatory)][string]$PluginData,
+        [string]$Namespace = 'local'
+    )
 
     $path = Get-ConfigPath -PluginData $PluginData
-    if (-not (Test-Path $path)) { return $null }
-    try {
-        return Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
-    } catch {
-        # A corrupted/truncated config.json shouldn't take the whole plugin
-        # down (both hooks would go permanently silent) - treat it the same
-        # as "no config yet".
+    # Reads under the same lock Save-VoiceConfig writes under (and reuses
+    # Read-ConfigRoot rather than its own separate parse) - found in review:
+    # a read that bypassed the lock could observe config.json mid-write from
+    # a concurrent Save-VoiceConfig call. A hashtable's values are read here
+    # via normal property access, matching every other caller's expectation
+    # of a Get-VoiceConfig result (they read $config.mode, $config.voiceName,
+    # etc., which works the same on a hashtable as it did on the PSCustomObject
+    # this used to return directly).
+    return Invoke-WithConfigLock -Action {
+        $root = Read-ConfigRoot -Path $path
+        if ($root.ContainsKey($Namespace)) { return $root[$Namespace] }
         return $null
     }
 }
 
-# Loads config.json as an editable hashtable, applies $Changes on top of it,
-# removes any key named in $Remove, and saves it back. Shared by
-# set-voice.ps1/set-mode.ps1 so they don't each hand-roll their own
-# read-modify-write logic. Returns the resulting hashtable.
+# Loads config.json, applies $Changes/$Remove only to the $Namespace section
+# (leaving every other namespace's section byte-for-byte as it was), and
+# saves the whole file back. Shared by set-voice.ps1/set-mode.ps1/etc. so
+# they don't each hand-roll their own read-modify-write logic. Returns the
+# resulting hashtable for just that namespace. Runs under the same config
+# lock Resolve-SharedDataDir's migration uses (Invoke-WithConfigLock) - see
+# that function's comment for why: without it, two near-simultaneous writes
+# (even to different namespaces, e.g. a Cowork MCP call and a CLI slash
+# command landing at the same moment) could race, and the second writer's
+# full-file snapshot would silently overwrite the first's change.
 function Save-VoiceConfig {
     param(
         [Parameter(Mandatory)][string]$PluginData,
+        [string]$Namespace = 'local',
         [hashtable]$Changes = @{},
         [string[]]$Remove = @()
     )
 
     $path = Get-ConfigPath -PluginData $PluginData
-    $current = @{}
-    if (Test-Path $path) {
-        try {
-            (Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json).psobject.Properties |
-                ForEach-Object { $current[$_.Name] = $_.Value }
-        } catch {
-            $current = @{}
-        }
+    return Invoke-WithConfigLock -Action {
+        $root = Read-ConfigRoot -Path $path
+        $current = if ($root.ContainsKey($Namespace)) { $root[$Namespace] } else { @{} }
+        foreach ($key in $Changes.Keys) { $current[$key] = $Changes[$key] }
+        foreach ($key in $Remove) { $current.Remove($key) }
+        $root[$Namespace] = $current
+        Write-ConfigRoot -Path $path -Root $root
+        $current
     }
-
-    foreach ($key in $Changes.Keys) { $current[$key] = $Changes[$key] }
-    foreach ($key in $Remove) { $current.Remove($key) }
-
-    $current | ConvertTo-Json | Set-Content -Path $path -Encoding UTF8
-    return $current
 }
 
 # Picks which installed voice to use: manual override (name or language) if
@@ -1095,10 +1289,8 @@ function Get-Logger {
     if (-not $PluginData) {
         return { param([string]$Message) }.GetNewClosure()
     }
-    if (-not (Test-Path $PluginData)) {
-        New-Item -ItemType Directory -Path $PluginData -Force | Out-Null
-    }
-    $path = Join-Path $PluginData $FileName
+    $dir = Resolve-SharedDataDir -PluginData $PluginData
+    $path = Join-Path $dir $FileName
     $maxBytes = 50KB
     $keepLines = 200
     return {

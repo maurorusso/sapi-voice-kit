@@ -1,0 +1,33 @@
+name: Tests
+
+# Runs on every push to a pull request (not only after approval - the point
+# is to know whether it passes BEFORE approving/merging, not after) and on
+# every push to main, so a direct push there is checked too.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    # Windows only, on purpose: this plugin's own code is Windows-only
+    # (System.Speech, OneCore) - windows-latest is what actually exercises
+    # the real target platform, not a stand-in.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No `Invoke-Pester` install step: Pester 3.4 ships with Windows
+      # PowerShell 5.1 by default (same version this project's own tests
+      # were written and run against), matching the project's own
+      # no-installers stance even for its dev tooling.
+      - name: Run PowerShell tests (Pester)
+        shell: powershell
+        run: Invoke-Pester tests/common.Tests.ps1 -EnableExit
+
+      - name: Run Node tests
+        run: node --test tests/server.test.js

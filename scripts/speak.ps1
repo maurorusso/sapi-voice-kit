@@ -111,7 +111,8 @@ try {
     & $Log "mode=[$mode], speaking $($text.Length) characters"
 
     if ($debugOn) {
-        Set-Content -Path (Join-Path $PluginData "last-text.txt") -Value $text -Encoding UTF8
+        $dataDir = Resolve-SharedDataDir -PluginData $PluginData
+        Set-Content -Path (Join-Path $dataDir "last-text.txt") -Value $text -Encoding UTF8
     }
 
     Invoke-SpeechSynthesis -Text $text -Config $config -UsePronunciation ($mode -ne 'literal') -Log $Log

@@ -9,10 +9,12 @@
 param(
     [Parameter(Mandatory)][string]$PluginData,
     [Parameter(Mandatory)][ValidateSet('on', 'off')]
-    [string]$State
+    [string]$State,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
 )
 
 . "$PSScriptRoot\common.ps1"
 
-Save-VoiceConfig -PluginData $PluginData -Changes @{ muted = ($State -eq 'on') } | Out-Null
+Save-VoiceConfig -PluginData $PluginData -Namespace $Namespace -Changes @{ muted = ($State -eq 'on') } | Out-Null
 Write-Output "Muted: $State"

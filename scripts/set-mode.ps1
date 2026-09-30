@@ -13,10 +13,12 @@
 param(
     [Parameter(Mandatory)][string]$PluginData,
     [Parameter(Mandatory)][ValidateSet('natural', 'literal', 'summary', 'active')]
-    [string]$Mode
+    [string]$Mode,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
 )
 
 . "$PSScriptRoot\common.ps1"
 
-Save-VoiceConfig -PluginData $PluginData -Changes @{ mode = $Mode } | Out-Null
+Save-VoiceConfig -PluginData $PluginData -Namespace $Namespace -Changes @{ mode = $Mode } | Out-Null
 Write-Output "Reading mode: $Mode"

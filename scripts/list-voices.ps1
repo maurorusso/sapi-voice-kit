@@ -5,7 +5,11 @@
 # every Windows install has. Shows which engine each row belongs to, since
 # the same display name never appears under both.
 
-param([string]$PluginData)
+param(
+    [string]$PluginData,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
+)
 
 . "$PSScriptRoot\common.ps1"
 
@@ -34,8 +38,8 @@ $rows += $sapiSynth.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach
 $rows | Format-Table -AutoSize
 
 if ($PluginData) {
-    $config = Get-VoiceConfig -PluginData $PluginData
+    $config = Get-VoiceConfig -PluginData $PluginData -Namespace $Namespace
     $target = Resolve-SpeechTarget -Config $config
     $activeName = if ($target.Engine -eq 'OneCore') { $target.Voice.DisplayName } else { $target.VoiceName }
-    Write-Output "Se está usando ahora: $activeName ($($target.Engine))"
+    Write-Output "Se está usando ahora ($Namespace): $activeName ($($target.Engine))"
 }

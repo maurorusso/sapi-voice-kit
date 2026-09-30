@@ -7,11 +7,16 @@
 #   hear something read - passes -Force so an explicit request still works
 #   even while muted (mute only silences the automatic per-turn reading).
 
-param([string]$PluginData, [switch]$Force)
+param(
+    [string]$PluginData,
+    [switch]$Force,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
+)
 
 . "$PSScriptRoot\common.ps1"
 
-$config = if ($PluginData) { Get-VoiceConfig -PluginData $PluginData } else { $null }
+$config = if ($PluginData) { Get-VoiceConfig -PluginData $PluginData -Namespace $Namespace } else { $null }
 $debugOn = $config -and $config.debug -eq $true
 $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -FileName "log-say.txt"
 
@@ -67,7 +72,8 @@ try {
     }
 
     if ($debugOn) {
-        Set-Content -Path (Join-Path $PluginData "last-text.txt") -Value $text -Encoding UTF8
+        $dataDir = Resolve-SharedDataDir -PluginData $PluginData
+        Set-Content -Path (Join-Path $dataDir "last-text.txt") -Value $text -Encoding UTF8
     }
 
     Invoke-SpeechSynthesis -Text $text -Config $config -UsePronunciation $true -Log $Log

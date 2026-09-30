@@ -16,11 +16,15 @@
 # in common.ps1's text-cleanup pipeline or $script:TechPronunciations,
 # instead of writing a new one-off script each time.
 
-param([Parameter(Mandatory)][string]$PluginData)
+param(
+    [Parameter(Mandatory)][string]$PluginData,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
+)
 
 . "$PSScriptRoot\common.ps1"
 
-$config = Get-VoiceConfig -PluginData $PluginData
+$config = Get-VoiceConfig -PluginData $PluginData -Namespace $Namespace
 $debugOn = $config -and $config.debug -eq $true
 $Log = Get-Logger -PluginData $(if ($debugOn) { $PluginData } else { $null }) -FileName "log-say-test.txt"
 

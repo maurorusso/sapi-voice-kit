@@ -91,9 +91,9 @@ Cowork sí soporta **servidores MCP locales** — procesos que corren en tu prop
 **Instalación:**
 
 - **CLI o el tab "Code" de Claude Desktop:** no hay ningún paso aparte — es la misma instalación de la sección "Instalación" de arriba. Al instalar el plugin ahí, se registra solo el servidor MCP (`read_aloud`), sin tocar ningún archivo a mano — confirmado en vivo instalando el plugin real y escuchando audio real salir de la herramienta.
-- **Cowork específicamente:** acá sí hace falta un paso manual, una sola vez — y no es un límite de este plugin. La [documentación oficial de Anthropic](https://claude.com/docs/cowork/3p/extensions) dice explícitamente que un plugin que un usuario común sube por su cuenta (a diferencia de uno instalado por un administrador de organización) puede traer skills, hooks y comandos, pero **no** un servidor MCP registrado automáticamente — eso solo pasa para plugins de organización. Confirmado en vivo: el plugin se instala bien (las skills y comandos funcionan), pero `read_aloud` nunca aparece solo en Configuración → Desarrollador → Servidores MCP locales.
+- **Cowork:** instalando desde el marketplace (Configuración → Plugins → Agregar marketplace, y después instalar `sapi-voice-kit` ahí), el servidor MCP se registró solo en una prueba real, apareciendo como una herramienta con un nombre parecido a `sapi-voice-kit__read_aloud` sin ningún paso manual — a diferencia de lo que documentamos antes (y de lo que decía la documentación de Anthropic sobre plugins de usuario). Si en tu caso no aparece solo, el paso manual de más abajo sigue funcionando como respaldo — pero **no agregues los dos a la vez**: si el automático ya registró el servidor, la entrada manual lo duplica.
 
-  Para que funcione en Cowork, agregalo ahí a mano, una vez:
+  Si hace falta el paso manual, una sola vez:
   1. Configuración → Desarrollador → Servidores MCP locales → **Editar configuración**.
   2. Pegá esto, reemplazando `<ruta-del-plugin>` por la carpeta donde Cowork instaló el plugin (fijate la ruta exacta en el mensaje de instalación, o en Configuración → Plugins → sapi-voice-kit):
      ```json
@@ -110,6 +110,12 @@ Cowork sí soporta **servidores MCP locales** — procesos que corren en tu prop
        }
      }
      ```
+
+Además de `read_aloud`, el servidor MCP también expone `set_mode`, `set_mute`, `set_voice`, `list_voices`, `say_test` y `set_debug` — son los mismos comandos que `/sapi-voice-kit:mode`, `:mute`, `:voice`, `:test` y `:debug` usan en la CLI, pero como herramientas MCP, porque la terminal propia de Cowork corre en un sandbox en la nube sin PowerShell ni acceso a esta máquina y no puede ejecutar esos scripts directamente. Las skills de cada comando ya saben usarlos automáticamente cuando corren en Cowork/Desktop.
+
+La configuración (modo, voz, mute, debug) vive en un solo archivo compartido, pero **separada en dos secciones independientes**: una para "local" (CLI + tab Code de Desktop — técnicamente no se pueden distinguir entre sí, así que comparten la misma) y otra para "cowork". Cambiar algo desde la CLI o el tab Code no toca la configuración de Cowork, y viceversa — así podés tener, por ejemplo, una voz en Cowork y otra distinta en la CLI, cada una con su propio modo y su propio mute.
+
+Si venís de una versión anterior a esta separación: la migración automática solo trae tu configuración vieja al lado que use el plugin primero después de actualizar (normalmente "local"). Si tenías algo configurado del lado de Cowork específicamente, puede que tengas que volver a elegirlo una vez (`/sapi-voice-kit:voice`, `/sapi-voice-kit:mode`) — no se pierde nada, pero tampoco se migra solo a los dos lados a la vez.
 
 Después de instalar (por cualquiera de los dos caminos):
 1. `/sapi-voice-kit:mode active`.

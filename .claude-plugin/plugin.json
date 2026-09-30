@@ -1,7 +1,7 @@
 {
   "name": "sapi-voice-kit",
   "description": "Reads Claude Code's responses aloud using Windows' native voice synthesis (a modern Windows 11 voice when available, SAPI via System.Speech otherwise) — no API keys, no Python, no external installers.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": {
     "name": "maurorusso"
   },

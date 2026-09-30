@@ -7,6 +7,8 @@ disable-model-invocation: true
 
 Argument received: "$ARGUMENTS"
 
+**If you're running as Claude Cowork/Desktop (not the CLI):** Cowork's own shell tool runs in a remote Linux sandbox with no PowerShell and no access to this machine, so the `powershell -File ...` commands below won't work there. Instead, call the MCP tool `set_mode` (from the sapi-voice-kit server - look for a tool name containing "sapi-voice-kit" and "set_mode") with `{"mode": "natural" | "literal" | "summary" | "active"}`, then skip straight to step 5 below to confirm. If you're the CLI, keep using the powershell commands as written.
+
 Steps:
 
 1. If the argument says "natural" (or is empty, "default"), run:
@@ -28,3 +30,5 @@ Steps:
    - **literal**: reads the complete response exactly as written, with no cleanup at all — useful mainly to check what the raw text actually says.
    - **summary**: reads a condensed summary of the response instead of the full text — takes about 20 seconds longer per response, since it makes a separate request for the summary. Falls back to natural mode automatically if that request fails.
    - **active**: Claude speaks a short, natural, complete paraphrase of its own response as part of the same turn — fastest and most natural-sounding, no extra files, no extra AI call, but may ask for a one-time permission the first time. Works the same way in the CLI and in Claude Cowork/Desktop, just via a different mechanism depending on which one you're running (a command in the CLI, an MCP tool in Cowork) — in Cowork it's slightly less reliable since the per-turn reminder comes from a skill instead of a hook.
+
+   Note: the mode set from the CLI/Desktop's "Code" tab and the mode set from Cowork are independent - setting it from one doesn't change the other, they're stored separately, on purpose, so each environment can be configured differently.

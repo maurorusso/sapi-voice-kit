@@ -7,7 +7,9 @@ param(
     [string]$Voice,
     [string]$Language,
     [int]$Rate = [int]::MinValue,
-    [switch]$Auto
+    [switch]$Auto,
+    [ValidateSet('local', 'cowork')]
+    [string]$Namespace = 'local'
 )
 
 . "$PSScriptRoot\common.ps1"
@@ -18,7 +20,7 @@ if ($Rate -ne [int]::MinValue -and ($Rate -lt -10 -or $Rate -gt 10)) {
 }
 
 if ($Auto) {
-    Save-VoiceConfig -PluginData $PluginData -Remove @('voiceName', 'language') | Out-Null
+    Save-VoiceConfig -PluginData $PluginData -Namespace $Namespace -Remove @('voiceName', 'language') | Out-Null
     Write-Output "Automatic mode: the system language will be detected again on every response."
 } else {
     $changes = @{}
@@ -27,7 +29,7 @@ if ($Auto) {
     if ($Language) { $changes.language = $Language; $remove += 'voiceName' }
     if ($Rate -ne [int]::MinValue) { $changes.rate = $Rate }
 
-    $updated = Save-VoiceConfig -PluginData $PluginData -Changes $changes -Remove $remove
+    $updated = Save-VoiceConfig -PluginData $PluginData -Namespace $Namespace -Changes $changes -Remove $remove
     Write-Output "Saved:"
     $updated | ConvertTo-Json
 }

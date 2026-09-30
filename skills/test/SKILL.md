@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # sapi-voice-kit test
 
-Run:
+**If you're running as Claude Cowork/Desktop (not the CLI):** call the MCP tool `say_test` (from the sapi-voice-kit server, no arguments) instead of the powershell command below - Cowork's shell has no PowerShell or access to this machine. If you're the CLI, run:
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/say-test.ps1" -PluginData "${CLAUDE_PLUGIN_DATA}"`
 
