@@ -21,13 +21,23 @@ jobs:
         with:
           node-version: '20'
 
-      # No `Invoke-Pester` install step: Pester 3.4 ships with Windows
+      # No install step for Pester itself - 3.4.0 ships with Windows
       # PowerShell 5.1 by default (same version this project's own tests
-      # were written and run against), matching the project's own
-      # no-installers stance even for its dev tooling.
+      # were written and run against, and the only version a normal
+      # contributor's machine has without installing anything). But
+      # GitHub's windows-latest image ALSO has a newer Pester (5.x)
+      # installed alongside it, and PowerShell auto-loads the highest
+      # available version by default - found live, by this workflow's own
+      # first real run: every test failed with "term '...' is not
+      # recognized" because Pester 5's discovery/run model doesn't expose
+      # top-level dot-sourced functions to It blocks the way 3.4 does.
+      # -RequiredVersion pins it to the same 3.4.0 local dev already runs
+      # against, so CI and a contributor's machine behave identically.
       - name: Run PowerShell tests (Pester)
         shell: powershell
-        run: Invoke-Pester tests/common.Tests.ps1 -EnableExit
+        run: |
+          Import-Module Pester -RequiredVersion 3.4.0
+          Invoke-Pester tests/common.Tests.ps1 -EnableExit
 
       - name: Run Node tests
         run: node --test tests/server.test.js
