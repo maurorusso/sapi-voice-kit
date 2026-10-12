@@ -9,9 +9,10 @@ $script:SpokenTextGuidance = 'If you mention a file name, say the word for a per
 
 # "summary" mode: asks Claude for a short spoken-style summary of $Text with a
 # separate `claude -p` call (about 20 s, which is why the mode is opt-in).
-# --safe-mode keeps that call from loading this plugin's own hooks, and the
-# prompt goes through stdin because a long response would exceed the Windows
-# command-line limit as an argument. Returns $null on any failure so the caller
+# --safe-mode keeps that call from loading this plugin's own hooks,
+# --no-session-persistence keeps it from saving a transcript of the response in
+# the user's Claude folder, and the prompt goes through stdin because a long
+# response would exceed the Windows command-line limit as an argument. Returns $null on any failure so the caller
 # can read the full text instead.
 function Get-AiSummary {
     param([Parameter(Mandatory)][string]$Text)
@@ -28,7 +29,7 @@ function Get-AiSummary {
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         $global:OutputEncoding = $utf8
         [Console]::OutputEncoding = $utf8
-        $result = $prompt | & claude -p --safe-mode --model haiku 2>$null
+        $result = $prompt | & claude -p --safe-mode --no-session-persistence --model haiku 2>$null
         if ($LASTEXITCODE -ne 0 -or -not $result) { return $null }
         $summary = ($result -join "`n").Trim()
         if ($summary) { return $summary }

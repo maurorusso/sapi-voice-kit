@@ -46,7 +46,7 @@ Describe 'ConvertTo-SpokenFileNames' {
         ConvertTo-SpokenFileNames -Text 'mirá scripts/common.ps1 ahora' | Should Be 'mirá common punto ps1 ahora'
     }
     It 'drops the folders of a Windows path' {
-        ConvertTo-SpokenFileNames -Text 'abrí C:\Desarrollos\IA\proyectos\sapi-voice-kit\README.md' | Should Be 'abrí README punto md'
+        ConvertTo-SpokenFileNames -Text 'abrí C:\Projects\App\docs\README.md' | Should Be 'abrí README punto md'
     }
     It 'leaves an unknown extension alone' {
         ConvertTo-SpokenFileNames -Text 'el archivo foo.xyz' | Should Be 'el archivo foo.xyz'
@@ -55,7 +55,7 @@ Describe 'ConvertTo-SpokenFileNames' {
 
 Describe 'ConvertTo-SpokenPaths' {
     It 'reduces a drive path to its last segment' {
-        ConvertTo-SpokenPaths -Text 'andá a C:\Desarrollos\IA' | Should Be 'andá a IA'
+        ConvertTo-SpokenPaths -Text 'andá a C:\Projects\App' | Should Be 'andá a App'
     }
     It 'leaves prose without a drive letter alone' {
         ConvertTo-SpokenPaths -Text 'esto es una oración normal' | Should Be 'esto es una oración normal'
@@ -100,8 +100,8 @@ Describe 'ConvertTo-SpokenAbbreviations' {
 
 Describe 'ConvertTo-SpokenIdentifiers' {
     It 'applies dotfile, file name, path and abbreviation rules together' {
-        $text = 'Abrí .env, scripts/common.ps1, C:\Desarrollos\IA y el Dr. Pérez'
-        ConvertTo-SpokenIdentifiers -Text $text | Should Be 'Abrí punto env, common punto ps1, IA y el doctor Pérez'
+        $text = 'Abrí .env, scripts/common.ps1, C:\Projects\App y el Dr. Pérez'
+        ConvertTo-SpokenIdentifiers -Text $text | Should Be 'Abrí punto env, common punto ps1, App y el doctor Pérez'
     }
 }
 

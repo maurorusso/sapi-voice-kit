@@ -8,6 +8,10 @@ on:
   push:
     branches: [main]
 
+# Read-only: the tests need nothing but the code.
+permissions:
+  contents: read
+
 jobs:
   test:
     # Windows only, on purpose: this plugin's own code is Windows-only
