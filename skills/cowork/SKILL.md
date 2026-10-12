@@ -10,4 +10,6 @@ At the end of every turn, after any tool calls, call the `read_aloud` tool of th
 
 The tool checks the configured mode itself and does nothing unless it is "active", so there is no need to check it first. Leave `force` at its default; use `force: true` only when the user explicitly asks to hear something while muted ("leeme eso").
 
+If the `read_aloud` tool does not exist in this conversation, the plugin's MCP server is not registered in Claude Desktop, so there is nothing to speak with. Tell the user once, in one short message (not every turn), to open Settings → Developer → Local MCP servers → Edit configuration and add the `sapi-voice-kit` server with the entry shown in the plugin's README (section "Uso en Claude Cowork"), then restart Claude Desktop. Do not keep retrying the tool or mention it again this conversation.
+
 Nothing makes this skill fire every turn: unlike the CLI's hook it depends on you invoking it, which is a limit of Cowork (plugin hooks do not run there). If you skip it the user hears nothing that turn. The first call in a session may ask the user for permission; that is expected.

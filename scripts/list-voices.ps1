@@ -6,7 +6,7 @@
 $voices = @(Get-InstalledVoices)
 
 $voices |
-    Select-Object @{ Name = 'Engine'; Expression = { if ($_.Engine -eq 'OneCore') { 'OneCore (moderna)' } else { 'SAPI5 (clasica)' } } }, Name, Language, Gender |
+    Select-Object @{ Name = 'Engine'; Expression = { if ($_.Engine -eq 'OneCore') { 'OneCore (moderna)' } else { 'SAPI5 (clásica)' } } }, Name, Language, Gender |
     Format-Table -AutoSize
 
 $active = Resolve-SpeechTarget -Config (Get-VoiceConfig) -Voices $voices
