@@ -64,7 +64,7 @@ function ConvertTo-SpokenFileNames {
     return [regex]::Replace($Text, "(?:[^\s\\/]+[\\/])*([\w-]+)\.($extPattern)\b", '$1 punto $2', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
 }
 
-# A drive-letter path with no recognized extension ("C:\Desarrollos\IA") -> its
+# A drive-letter path with no recognized extension ("C:\Projects\App") -> its
 # last segment. "C:\" never appears in ordinary prose, so this is safe.
 function ConvertTo-SpokenPaths {
     param([string]$Text)

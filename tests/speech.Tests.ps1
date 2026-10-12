@@ -314,6 +314,11 @@ $text = [System.Text.Encoding]::UTF8.GetString($buffer.ToArray())
         $codes | Should Match '00F3'
         $codes | Should Match '00F1'
     }
+    It 'asks claude not to keep a transcript of the response on disk' {
+        [System.IO.File]::WriteAllText("$script:fakeBin\claude.cmd", "@echo ARGS: %*", [System.Text.Encoding]::ASCII)
+        $env:PATH = "$script:fakeBin;$script:originalPath"
+        Get-AiSummary -Text 'algo privado' | Should Match '--no-session-persistence'
+    }
     It 'returns nothing when claude prints only whitespace' {
         [System.IO.File]::WriteAllText("$script:fakeBin\claude.cmd", "@echo.", [System.Text.Encoding]::ASCII)
         $env:PATH = "$script:fakeBin;$script:originalPath"

@@ -147,27 +147,30 @@ $soundMinimum = 0.2
 
 $failures = 0
 $number = 0
-foreach ($step in $steps) {
-    $number++
-    if ($step.Set) { Save-VoiceConfig -Namespace $(if ($step.SetCowork) { 'cowork' } else { 'local' }) -Changes $step.Set | Out-Null }
+try {
+    foreach ($step in $steps) {
+        $number++
+        if ($step.Set) { Save-VoiceConfig -Namespace $(if ($step.SetCowork) { 'cowork' } else { 'local' }) -Changes $step.Set | Out-Null }
 
-    if ($step.Mcp) {
-        $lines = @($mcpHello) + $step.Calls
-        $result = Invoke-Watched -FileName $node.Source -Arguments "`"$pluginRoot\mcp-server\server.js`"" -Stdin ($lines -join "`n")
-    } else {
-        $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\$($step.Script)`" $($step.Args -join ' ')"
-        $result = Invoke-Watched -FileName 'powershell' -Arguments $arguments -Stdin $step.Stdin
+        if ($step.Mcp) {
+            $lines = @($mcpHello) + $step.Calls
+            $result = Invoke-Watched -FileName $node.Source -Arguments "`"$pluginRoot\mcp-server\server.js`"" -Stdin ($lines -join "`n")
+        } else {
+            $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\$($step.Script)`" $($step.Args -join ' ')"
+            $result = Invoke-Watched -FileName 'powershell' -Arguments $arguments -Stdin $step.Stdin
+        }
+
+        $passed = if ($step.Expect -eq 'sound') { $result.Peak -ge $soundMinimum } else { $result.Peak -le $silentLimit }
+        if (-not $passed) { $failures++ }
+        $detail = ($result.Output -split "`n" | Where-Object { $_ } | Select-Object -Last 1)
+        Write-Output ('{0} {1,2}. {2} (esperado: {3}, nivel {4:N2}) {5}' -f $(if ($passed) { 'PASS' } else { 'FAIL' }), $number, $step.Label, $step.Expect, $result.Peak, $detail)
+        Start-Sleep -Milliseconds 800
     }
-
-    $passed = if ($step.Expect -eq 'sound') { $result.Peak -ge $soundMinimum } else { $result.Peak -le $silentLimit }
-    if (-not $passed) { $failures++ }
-    $detail = ($result.Output -split "`n" | Where-Object { $_ } | Select-Object -Last 1)
-    Write-Output ('{0} {1,2}. {2} (esperado: {3}, nivel {4:N2}) {5}' -f $(if ($passed) { 'PASS' } else { 'FAIL' }), $number, $step.Label, $step.Expect, $result.Peak, $detail)
-    Start-Sleep -Milliseconds 800
+} finally {
+    # The throwaway home goes away even if the run is interrupted.
+    Remove-Item -Path $env:USERPROFILE -Recurse -Force -ErrorAction SilentlyContinue
+    $env:USERPROFILE = $realHome
 }
-
-Remove-Item -Path $env:USERPROFILE -Recurse -Force -ErrorAction SilentlyContinue
-$env:USERPROFILE = $realHome
 
 Write-Output ''
 Write-Output "$($steps.Count) pasos, $failures fallaron."

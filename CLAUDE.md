@@ -35,7 +35,7 @@ The Stop hook receives `last_assistant_message` and acts on `mode` from `config.
 
 - **natural** (default): the whole response, markdown removed (`Get-CleanedText`).
 - **literal**: the whole response exactly as written.
-- **summary**: a short summary from a separate `claude -p` call. About 20 s of silence, so opt-in; falls back to natural if the call fails.
+- **summary**: a short summary from a separate `claude -p --no-session-persistence` call (the flag keeps Claude Code from saving a transcript of the response on the user's disk). About 20 s of silence, so opt-in; falls back to natural if the call fails.
 - **active**: the model speaks a short paraphrase itself, mid-turn, by piping it to `say.ps1`; the Stop hook stays silent so audio never doubles. In the CLI a UserPromptSubmit hook reminds the model each turn (Claude Code asks for permission once per session). In Cowork, which fires no plugin hooks, `skills/cowork` reminds it to call the `read_aloud` MCP tool.
 
 `muted` pauses automatic reading without losing the mode. `read-last` ("leeme eso") reads one response on demand through `say.ps1 -Force`, which ignores mute.

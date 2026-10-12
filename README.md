@@ -117,7 +117,7 @@ Después de instalar: `/sapi-voice-kit:mode active`. La primera vez te va a pedi
 
 La única excepción es un archivo minúsculo (`.last-active-speech`) que se actualiza cada vez que `say.ps1` habla sin que se lo hayas pedido expresamente (modo `active` y la herramienta `read_aloud` de Cowork; los modos `natural`, `literal` y `summary` no lo tocan), para evitar hablar dos veces seguidas por accidente (puede pasar en modo `active` si el modelo dispara el mecanismo de la CLI y el de Cowork en el mismo turno) — guarda solo una marca de tiempo, nunca el texto ni nada derivado de él, y se pisa en cada uso.
 
-Los archivos de log (`log-speak.txt`, `log-say.txt`, `log-say-test.txt`) y una copia del último texto leído (`last-text.txt`) **solo existen si vos los pedís explícitamente** con `/sapi-voice-kit:debug on`, para diagnosticar un problema puntual. Incluso con eso prendido, cada log tiene un tope de tamaño (se recorta solo a las últimas 200 líneas) — no crece para siempre. Se recomienda volver a apagarlo (`/sapi-voice-kit:debug off`) una vez resuelto lo que sea que estabas viendo.
+Los archivos de log (`log-speak.txt`, `log-say.txt`, `log-say-test.txt`) y una copia del último texto leído (`last-text.txt`) **solo existen si vos los pedís explícitamente** con `/sapi-voice-kit:debug on`, para diagnosticar un problema puntual. Los logs registran qué hizo el plugin (voz elegida, errores), no el texto leído; un mensaje de error de PowerShell puede incluir un fragmento de lo que estaba procesando. Incluso con eso prendido, cada log tiene un tope de tamaño (se recorta solo a las últimas 200 líneas) — no crece para siempre. Se recomienda volver a apagarlo (`/sapi-voice-kit:debug off`) una vez resuelto lo que sea que estabas viendo.
 
 `/sapi-voice-kit:mute` y la lectura a demanda no agregan ningún archivo nuevo: el mute es un valor más adentro del mismo `config.json` que ya se guardaba, y la lectura a demanda toma el texto que ya está en la conversación y lo pasa directo por memoria a la síntesis de voz — igual que el modo `active`, nunca toca disco.
 
@@ -147,7 +147,7 @@ Al actualizar desde una versión anterior a la 0.9 hay que volver a elegir la vo
 
 Es una pregunta que vale la pena responder explícitamente: **el plugin no escribe, en ningún momento, a `%TEMP%`, `C:\Windows\Temp`, ni ningún otro directorio temporal.** El texto que se lee en voz alta viaja siempre por memoria (stdin/stdout entre procesos), nunca pasa por un archivo intermedio — ni uno que se borre después, directamente no existe ese archivo en ningún punto del proceso. Esto fue una decisión deliberada (ver Privacidad arriba): se evaluó incluso la idea de un archivo que se autoborre al toque, y se descartó en favor de no escribir nada de entrada, que es más seguro todavía.
 
-La única excepción real: en modo `summary`, la llamada `claude -p` es un proceso de Claude Code aparte, y ese proceso puede usar sus propios archivos temporales internos como cualquier sesión normal de Claude Code — eso está fuera del control de este plugin, es el mismo comportamiento que tendría cualquier uso tuyo de Claude Code sin el plugin de por medio.
+La única excepción real: en modo `summary`, el texto de la respuesta se le manda a Claude (una llamada `claude -p` aparte) para que lo resuma, y eso sí sale de tu máquina. El plugin lo llama con `--no-session-persistence`, así que Claude Code no guarda una transcripción de esa llamada en tu disco.
 
 ### Cómo funciona cada modo, componente por componente
 

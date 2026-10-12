@@ -104,3 +104,19 @@ test('every PowerShell function the documentation names exists in scripts/', () 
     }
   }
 });
+
+test('the repository holds only text files: no stray caches or binaries', () => {
+  const skip = new Set(['.git', 'node_modules', 'plans', '.claude']);
+  const binaries = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const relative = dir ? `${dir}/${entry.name}` : entry.name;
+      if (skip.has(entry.name)) continue;
+      if (entry.isDirectory()) walk(relative);
+      else if (fs.readFileSync(path.join(root, relative)).includes(0)) binaries.push(relative);
+    }
+  };
+  walk('');
+  assert.deepEqual(binaries, []);
+});
+
