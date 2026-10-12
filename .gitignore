@@ -13,3 +13,7 @@ Thumbs.db
 
 # Machine-specific Claude Code settings
 /.claude/
+
+# PowerShell writes this analysis cache into the current folder when its profile
+# location is unusual; it is never part of the plugin.
+/Microsoft/
