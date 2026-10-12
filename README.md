@@ -92,18 +92,20 @@ Cowork sí soporta **servidores MCP locales**: procesos que corren en tu propia 
 **Instalación:**
 
 - **CLI o el tab "Code" de Claude Desktop:** ninguna aparte; es la instalación normal de arriba, y el servidor MCP se registra solo.
-- **Cowork:** Configuración → Plugins → Agregar marketplace → instalar `sapi-voice-kit`. En algunas pruebas el servidor MCP se registró solo; en otras no (Anthropic documenta que un plugin que instala el usuario no trae servidores MCP propios en Cowork). Revisá en Configuración → Desarrollador → Servidores MCP locales. Si `sapi-voice-kit` no aparece, agregalo una sola vez: **Editar configuración** y pegá lo siguiente, con la carpeta donde quedó instalado el plugin. No lo agregues si ya aparece, porque queda duplicado.
+- **Cowork, en dos pasos.** Cowork instala las skills del plugin pero, según la documentación de Anthropic, no los servidores MCP que traiga (en algunas pruebas sí se registró solo). Por eso hay un paso más que en la CLI:
+  1. Configuración → Plugins → Agregar marketplace (`https://github.com/maurorusso/sapi-voice-kit`) → instalar `sapi-voice-kit`.
+  2. Configuración → Desarrollador → Servidores MCP locales. Si `sapi-voice-kit` ya aparece, no hagas nada (agregarlo de nuevo lo duplica). Si no aparece: **Editar configuración**, pegá lo siguiente con la carpeta donde quedó instalado el plugin (o una copia del repositorio) y reiniciá Claude Desktop.
 
-  ```json
-  {
-    "mcpServers": {
-      "sapi-voice-kit": {
-        "command": "node",
-        "args": ["<carpeta-del-plugin>/mcp-server/server.js"]
-      }
-    }
-  }
-  ```
+     ```json
+     {
+       "mcpServers": {
+         "sapi-voice-kit": {
+           "command": "node",
+           "args": ["<carpeta-del-plugin>/mcp-server/server.js"]
+         }
+       }
+     }
+     ```
 
 **Configuración por entorno.** Todo vive en un solo archivo, dividido en dos secciones independientes: `local` (la CLI y el tab Code usan la misma, porque el plugin no puede distinguirlos) y `cowork`. Cambiar la voz, el modo, el mute o el debug en una no toca la otra, así que podés tener, por ejemplo, Laura en Cowork y Pablo en la CLI.
 
