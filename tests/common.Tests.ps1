@@ -176,6 +176,9 @@ Describe 'Get-PronunciationDictionary' {
             (Get-PronunciationDictionary -Language $language).Count | Should Be 0
         }
     }
+    It 'stresses the Spanish word natural on its last syllable, not the English way' {
+        (Get-PronunciationDictionary -Language 'es-ES')['natural'] | Should Match 'ˈɾal$'
+    }
     It 'uses a dictionary file as soon as one is added for a language' {
         $path = "$repoRoot\scripts\lib\pronunciations\zz.psd1"
         [System.IO.File]::WriteAllText($path, "@{ 'hola' = 'ˈola' }", (New-Object System.Text.UTF8Encoding($true)))

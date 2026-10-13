@@ -74,6 +74,8 @@
     'method'       = 'ˈmɛθəd'
     'model'        = 'ˈmodel'
     'module'       = 'ˈmɑdʒul'
+    # A Spanish word, not a loanword: aguda ending in -l, so no written accent and the stress on the last syllable (na-tu-RAL). Listed because this voice stresses the first syllable, English-style.
+    'natural'      = 'natuˈɾal'
     'node'         = 'ˈnoʊd'
     'npm'          = 'ɛnpiˈɛm'
     'null'         = 'ˈnʌl'
