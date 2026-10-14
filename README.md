@@ -107,6 +107,8 @@ Cowork sí soporta **servidores MCP locales**: procesos que corren en tu propia 
      }
      ```
 
+**Si Cowork dice "Este mercado ya está agregado" pero muestra una versión vieja:** ese marketplace quedó guardado en tu cuenta con una versión anterior y Cowork no deja quitarlo (solo desactiva el plugin). Agregalo escribiendo la dirección de otra forma, por ejemplo con `.git` al final (`https://github.com/maurorusso/sapi-voice-kit.git`) o como `maurorusso/sapi-voice-kit`: Cowork no la reconoce como la ya guardada y trae la versión actual. Fijate en "Descubrir" que diga la versión nueva antes de instalar.
+
 **Configuración por entorno.** Todo vive en un solo archivo, dividido en dos secciones independientes: `local` (la CLI y el tab Code usan la misma, porque el plugin no puede distinguirlos) y `cowork`. Cambiar la voz, el modo, el mute o el debug en una no toca la otra, así que podés tener, por ejemplo, Laura en Cowork y Pablo en la CLI.
 
 Después de instalar: `/sapi-voice-kit:mode active`. La primera vez te va a pedir permiso para usar la herramienta; es lo esperado.
