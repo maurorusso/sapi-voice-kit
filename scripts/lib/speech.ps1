@@ -15,6 +15,7 @@ function Invoke-SpeechOnVoice {
     # The system default voice records no language; assume the system's.
     $language = if ($Voice.Language) { $Voice.Language } else { (Get-Culture).Name }
     $Dictionary = if ($UsePronunciation) { Get-PronunciationDictionary -Language $language } else { @{} }
+    if ($UsePronunciation) { $Text = ConvertTo-RespelledText -Text $Text -Respellings (Get-Respellings -Language $language) }
 
     if ($Voice.Engine -eq 'OneCore') {
         Invoke-OneCoreSpeech -Text $Text -Voice $Voice.Native -Rate $Rate -Dictionary $Dictionary -Log $Log
