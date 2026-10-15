@@ -96,6 +96,19 @@ Describe 'Pronunciation dictionary follows the voice language' {
         Invoke-SpeechOnVoice -Voice $mexican -Text 'git' -Rate 0
         Assert-MockCalled Invoke-OneCoreSpeech -Scope It -Exactly 1 -ParameterFilter { $Dictionary.ContainsKey('git') }
     }
+    It 'respells for a Spanish voice, so natural is stressed on its last syllable' {
+        Mock Invoke-OneCoreSpeech {}
+        Invoke-SpeechOnVoice -Voice $mexican -Text 'Esto es natural.' -Rate 0
+        Assert-MockCalled Invoke-OneCoreSpeech -Scope It -Exactly 1 -ParameterFilter { $Text -eq 'Esto es naturál.' }
+    }
+    It 'does not respell for an English voice or when pronunciation is off' {
+        Mock Invoke-Sapi5Speech {}
+        Mock Invoke-OneCoreSpeech {}
+        Invoke-SpeechOnVoice -Voice $english -Text 'Esto es natural.' -Rate 0
+        Invoke-SpeechOnVoice -Voice $mexican -Text 'Esto es natural.' -Rate 0 -UsePronunciation $false
+        Assert-MockCalled Invoke-Sapi5Speech -Scope It -Exactly 1 -ParameterFilter { $Text -eq 'Esto es natural.' }
+        Assert-MockCalled Invoke-OneCoreSpeech -Scope It -Exactly 1 -ParameterFilter { $Text -eq 'Esto es natural.' }
+    }
     It 'gives an English voice no hints: the dictionary is written for Spanish' {
         Mock Invoke-Sapi5Speech {}
         Invoke-SpeechOnVoice -Voice $english -Text 'git' -Rate 0

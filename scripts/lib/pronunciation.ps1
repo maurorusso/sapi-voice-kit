@@ -1,27 +1,64 @@
-﻿# Pronunciation hints for technical terms. The voice reads the whole text, but
-# words listed in the dictionary for its language (pronunciations/<code>.psd1)
-# get an explicit IPA pronunciation, so "git" is said the English way by a
-# Spanish voice instead of being read with Spanish rules.
+﻿# Pronunciation hints. The voice reads the whole text, but words listed in the
+# dictionary for its language (pronunciations/<code>.psd1) get an explicit IPA
+# pronunciation, so "git" is said the English way by a Spanish voice instead of
+# being read with Spanish rules. Words the voice stresses wrongly even so are
+# respelled (respellings/<code>.psd1).
 # Switching to a second, English voice for those words was tried and rejected:
 # it sounds like two people talking and doubles the speaking time.
 
-$script:PronunciationDictionaries = @{}
+$script:LanguageTables = @{}
 
-# The dictionary for a voice's language ("es-MX" -> es.psd1), or an empty one
-# when that language has none: hints written for one language would be wrong in
-# another. Each file is read once per process.
-function Get-PronunciationDictionary {
-    param([string]$Language)
+# The table in <Folder>/<code>.psd1 for a voice's language ("es-MX" -> es.psd1),
+# or an empty one when that language has none: data written for one language
+# would be wrong in another. Each file is read once per process.
+function Import-LanguageTable {
+    param(
+        [Parameter(Mandatory)][string]$Folder,
+        [string]$Language
+    )
 
     $code = "$Language".Split('-')[0].ToLowerInvariant()
     # The code comes from the voice or from config.json and becomes part of a path.
     if ($code -cnotmatch '^[a-z]{2,3}$') { return @{} }
 
-    if (-not $script:PronunciationDictionaries.ContainsKey($code)) {
-        $path = Join-Path $PSScriptRoot "pronunciations\$code.psd1"
-        $script:PronunciationDictionaries[$code] = if (Test-Path $path) { Import-PowerShellDataFile -Path $path } else { @{} }
+    $key = "$Folder/$code"
+    if (-not $script:LanguageTables.ContainsKey($key)) {
+        $path = Join-Path $PSScriptRoot "$Folder\$code.psd1"
+        $script:LanguageTables[$key] = if (Test-Path $path) { Import-PowerShellDataFile -Path $path } else { @{} }
     }
-    return $script:PronunciationDictionaries[$code]
+    return $script:LanguageTables[$key]
+}
+
+# word -> IPA, for the words a voice of this language says wrongly.
+function Get-PronunciationDictionary {
+    param([string]$Language)
+    return Import-LanguageTable -Folder 'pronunciations' -Language $Language
+}
+
+# word -> respelling, for the words whose stress the voice gets wrong even with IPA.
+function Get-Respellings {
+    param([string]$Language)
+    return Import-LanguageTable -Folder 'respellings' -Language $Language
+}
+
+# $Text with each whole word that has a respelling replaced by it, keeping the
+# capitalization ("Natural" -> "Naturál", "NATURAL" -> "NATURÁL").
+function ConvertTo-RespelledText {
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory)][hashtable]$Respellings
+    )
+
+    if ($Respellings.Count -eq 0) { return $Text }
+    $evaluator = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m)
+        $respelling = $Respellings[$m.Value.ToLowerInvariant()]
+        if (-not $respelling) { return $m.Value }
+        if ($m.Value.Length -gt 1 -and $m.Value -ceq $m.Value.ToUpperInvariant()) { return $respelling.ToUpperInvariant() }
+        if ($m.Value[0] -ceq [char]::ToUpperInvariant($m.Value[0])) { return $respelling.Substring(0, 1).ToUpperInvariant() + $respelling.Substring(1) }
+        return $respelling
+    }
+    return [regex]::Replace($Text, '\w+', $evaluator)
 }
 
 # Splits $Text into consecutive segments of { Text; Ipa }. Ipa is the dictionary

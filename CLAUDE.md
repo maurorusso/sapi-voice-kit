@@ -55,7 +55,7 @@ The old per-install config is not migrated (removed in 0.9.0); settings reset on
 
 `Get-InstalledVoices` merges OneCore (modern Windows 11 voices, listed first so they win automatic selection) and SAPI5 (classic, on every Windows). A configured voice name or language is matched against that one list. If a voice fails, `Invoke-SpeechSynthesis` falls back: OneCore → SAPI5 voice for the language → SAPI5 default.
 
-Technical terms (git, commit, hook, ...) get IPA pronunciations on the *same* voice, from the dictionary of the language that voice speaks: `scripts/lib/pronunciations/<code>.psd1` (today only `es.psd1`, used for every Spanish voice, es-ES, es-MX, ...). A voice in a language with no file gets no hints, because IPA written for Spanish is wrong for another language. To support another language, add its file; nothing else changes. The rules for adding entries are at the top of `es.psd1`. Check changes with `/sapi-voice-kit:test` by ear.
+Technical terms (git, commit, hook, ...) get IPA pronunciations on the *same* voice, from the dictionary of the language that voice speaks: `scripts/lib/pronunciations/<code>.psd1` (today only `es.psd1`, used for every Spanish voice, es-ES, es-MX, ...). A voice in a language with no file gets no hints, because IPA written for Spanish is wrong for another language. To support another language, add its file; nothing else changes. Words the voices stress wrongly even with IPA are respelled instead (`scripts/lib/respellings/<code>.psd1`, e.g. `natural` -> `naturál`: the written accent is honored where the IPA stress mark is not; the screen text is untouched). Both are skipped in literal mode. The rules for adding entries are at the top of each file. Check changes with `/sapi-voice-kit:test` by ear.
 
 ## Cowork
 

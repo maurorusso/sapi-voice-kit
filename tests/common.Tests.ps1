@@ -138,6 +138,50 @@ Describe 'Get-CleanedText' {
     }
 }
 
+Describe 'Respellings' {
+    $files = @(Get-ChildItem "$repoRoot\scripts\lib\respellings" -Filter *.psd1)
+
+    It 'has one file per two-letter language code' {
+        $files.Count | Should BeGreaterThan 0
+        @($files | Where-Object { $_.BaseName -cnotmatch '^[a-z]{2,3}$' }).Count | Should Be 0
+    }
+    foreach ($file in $files) {
+        $table = Import-PowerShellDataFile -Path $file.FullName
+
+        It "$($file.Name) maps single lowercase words to single words" {
+            @($table.Keys | Where-Object { $_ -cnotmatch '^[a-z]+$' }).Count | Should Be 0
+            @($table.Values | Where-Object { $_ -notmatch '^[\p{L}]+$' }).Count | Should Be 0
+        }
+    }
+
+    It 'respells natural so the Spanish voices stress its last syllable' {
+        (Get-Respellings -Language 'es-ES')['natural'] | Should Be 'naturál'
+    }
+    It 'gives every Spanish variant the Spanish table and other languages none' {
+        (Get-Respellings -Language 'es-MX').ContainsKey('natural') | Should Be $true
+        (Get-Respellings -Language 'en-US').Count | Should Be 0
+        (Get-Respellings -Language '../x').Count | Should Be 0
+    }
+}
+
+Describe 'ConvertTo-RespelledText' {
+    $table = @{ natural = 'naturál' }
+
+    It 'respells a whole word' {
+        ConvertTo-RespelledText -Text 'esto es natural.' -Respellings $table | Should Be 'esto es naturál.'
+    }
+    It 'keeps the capitalization' {
+        ConvertTo-RespelledText -Text 'Natural y NATURAL' -Respellings $table | Should Be 'Naturál y NATURÁL'
+    }
+    It 'leaves words that merely contain it alone' {
+        ConvertTo-RespelledText -Text 'naturaleza y sobrenatural' -Respellings $table | Should Be 'naturaleza y sobrenatural'
+    }
+    It 'leaves the text alone when there are no respellings or it is empty' {
+        ConvertTo-RespelledText -Text 'natural' -Respellings @{} | Should Be 'natural'
+        ConvertTo-RespelledText -Text '' -Respellings $table | Should Be ''
+    }
+}
+
 Describe 'Pronunciation dictionaries' {
     $files = @(Get-ChildItem "$repoRoot\scripts\lib\pronunciations" -Filter *.psd1)
 
@@ -176,14 +220,11 @@ Describe 'Get-PronunciationDictionary' {
             (Get-PronunciationDictionary -Language $language).Count | Should Be 0
         }
     }
-    It 'stresses the Spanish word natural on its last syllable, not the English way' {
-        (Get-PronunciationDictionary -Language 'es-ES')['natural'] | Should Match 'ˈɾal$'
-    }
     It 'uses a dictionary file as soon as one is added for a language' {
         $path = "$repoRoot\scripts\lib\pronunciations\zz.psd1"
         [System.IO.File]::WriteAllText($path, "@{ 'hola' = 'ˈola' }", (New-Object System.Text.UTF8Encoding($true)))
         try { (Get-PronunciationDictionary -Language 'zz-ZZ')['hola'] | Should Be 'ˈola' }
-        finally { Remove-Item $path; $script:PronunciationDictionaries.Remove('zz') }
+        finally { Remove-Item $path; $script:LanguageTables.Remove('pronunciations/zz') }
     }
 }
 
@@ -311,10 +352,13 @@ Describe 'Invoke-WithNamedMutex' {
             param($name)
             $mutex = New-Object System.Threading.Mutex($false, $name)
             [void]$mutex.WaitOne()
+            'held'
             Start-Sleep -Seconds 4
             $mutex.ReleaseMutex()
         }
-        Start-Sleep -Milliseconds 1500
+        # Wait until the other process really has the mutex, however long it takes to start.
+        $deadline = (Get-Date).AddSeconds(30)
+        while ((Get-Date) -lt $deadline -and -not (@(Receive-Job $holder -Keep) -contains 'held')) { Start-Sleep -Milliseconds 100 }
         $messages = New-Object System.Collections.Generic.List[string]
         $log = { param([string]$Message) $messages.Add($Message) }.GetNewClosure()
         $result = Invoke-WithNamedMutex -Name $name -TimeoutMs 300 -Log $log -Action { 'ran' }

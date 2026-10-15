@@ -14,7 +14,7 @@ Todos los scripts cargan `scripts/common.ps1`, que solo ordena la carga de `scri
 | `logging.ps1` | Log de diagnóstico, solo con `debug on` |
 | `script-context.ps1` | Lo que todo script necesita al arrancar: configuración, logger y lectura de stdin en UTF-8 |
 | `text-normalization.ps1` | De texto escrito a texto para el oído: archivos, rutas, links, abreviaturas, markdown |
-| `pronunciation.ps1` + `pronunciations/<idioma>.psd1` | Los diccionarios IPA (hoy solo `es.psd1`, para toda voz en español; otro idioma se agrega con su propio archivo) y cómo se parte un texto en segmentos con y sin pronunciación |
+| `pronunciation.ps1` + `pronunciations/<idioma>.psd1` + `respellings/<idioma>.psd1` | Los diccionarios IPA (hoy solo `es.psd1`, para toda voz en español; otro idioma se agrega con su propio archivo), las reescrituras de palabras que la voz acentúa mal aun con IPA (p. ej. `natural` se lee `naturál`; la pantalla no cambia) y cómo se parte un texto en segmentos con y sin pronunciación |
 | `speech-rate.ps1` | La velocidad de lectura (-10 a 10) y su saneamiento |
 | `engine-onecore.ps1`, `engine-sapi5.ps1` | Los dos motores de voz; cada uno arma su propio formato de pronunciación (SSML `<phoneme>` en OneCore, `PromptBuilder` en SAPI5), sin lógica de elección |
 | `voices.ps1` | Qué voz habla: lista unificada de voces y elección por nombre o idioma |
