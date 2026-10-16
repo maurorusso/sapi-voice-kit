@@ -1,5 +1,5 @@
 ---
-description: Run the complete sapi-voice-kit self-test: every reading mode is spoken out loud and an output-level meter checks that sound came out when it should and stayed silent when it should. Takes about 3 minutes and speaks the whole time.
+description: Run the complete sapi-voice-kit self-test. Every reading mode is spoken out loud and an output-level meter checks that sound came out when it should and stayed silent when it should. Takes about 3 minutes and speaks the whole time.
 disable-model-invocation: true
 ---
 

@@ -112,3 +112,16 @@ test('the repository holds only text files: no stray caches or binaries', () => 
   const binaries = tracked.filter((file) => fs.existsSync(path.join(root, file)) && fs.readFileSync(path.join(root, file)).includes(0));
   assert.deepEqual(binaries, []);
 });
+
+test('every skill description is valid YAML: an unquoted value cannot contain ": " or " #"', () => {
+  const skills = fs.readdirSync(path.join(root, 'skills')).map((dir) => `skills/${dir}/SKILL.md`);
+  for (const file of skills) {
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(read(file));
+    assert.ok(frontMatter, `${file} has no front matter`);
+    const line = frontMatter[1].split(/\r?\n/).find((l) => l.startsWith('description:'));
+    assert.ok(line, `${file} has no description`);
+    const value = line.slice('description:'.length).trim();
+    if (/^["'>|]/.test(value)) continue;
+    assert.doesNotMatch(value, /: | #/, `${file}: an unquoted description with ": " or " #" does not parse as YAML`);
+  }
+});
