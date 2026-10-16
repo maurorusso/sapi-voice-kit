@@ -147,6 +147,15 @@ No se registra nada en "Programas y características", no se toca el `PATH`, no 
 
 Al actualizar desde una versión anterior a la 0.9 hay que volver a elegir la voz y el modo una vez: la configuración vieja vivía en una carpeta distinta por instalación y ya no se migra.
 
+### Qué ejecuta el plugin
+
+Todo lo que corre está en este repositorio y se puede leer: no hay código compilado, minificado ni descargado.
+
+- **Scripts de PowerShell** (`scripts/`), lanzados por los hooks de Claude Code y por el servidor MCP, siempre con `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. El `Bypass` vale solo para ese proceso (no cambia la política de tu equipo) y hace falta porque los scripts de un plugin no están firmados.
+- **Un servidor MCP local** (`node mcp-server/server.js`), sin dependencias de npm: recibe las llamadas de Cowork y ejecuta esos mismos scripts. Habla solo por la entrada y salida estándar; no abre ningún puerto.
+- **En modo `summary`**, una llamada a `claude -p --no-session-persistence` con el texto de la respuesta, que sale hacia Claude. Es lo único que se envía fuera de tu máquina.
+- No hace falta ninguna credencial, token ni variable de entorno propia, y no se lee ninguna que ya tengas.
+
 ### ¿Usa alguna carpeta temporal? No — ninguna, en ningún modo
 
 Es una pregunta que vale la pena responder explícitamente: **el plugin no escribe, en ningún momento, a `%TEMP%`, `C:\Windows\Temp`, ni ningún otro directorio temporal.** El texto que se lee en voz alta viaja siempre por memoria (stdin/stdout entre procesos), nunca pasa por un archivo intermedio — ni uno que se borre después, directamente no existe ese archivo en ningún punto del proceso. Esto fue una decisión deliberada (ver Privacidad arriba): se evaluó incluso la idea de un archivo que se autoborre al toque, y se descartó en favor de no escribir nada de entrada, que es más seguro todavía.

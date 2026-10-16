@@ -1,3 +1,0 @@
-# Text files are stored with LF and checked out as-is on every platform, so
-# diffs stay clean and the tests do not depend on a machine's autocrlf setting.
-* text=auto eol=lf
