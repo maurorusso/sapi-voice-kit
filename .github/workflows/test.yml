@@ -1,0 +1,40 @@
+name: Tests
+
+# Runs on every pull request, so it is known whether a change passes before it
+# is merged, and on every push to main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only: the tests need nothing but the code.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Windows only, on purpose: the plugin's code is Windows-only (System.Speech,
+    # OneCore), so windows-latest exercises the real target platform.
+    runs-on: windows-latest
+    # A hung audio or lock test must not hold the runner for the default 6 hours.
+    timeout-minutes: 15
+    steps:
+      # Actions are pinned to a commit, not a tag that can be moved.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      # Pester 3.4.0 ships with Windows PowerShell 5.1; the runner image also has
+      # Pester 5, which PowerShell would load first and which scopes dot-sourced
+      # functions differently. Pinning 3.4.0 makes CI behave like a contributor's
+      # machine.
+      - name: Run PowerShell tests (Pester)
+        shell: powershell
+        run: |
+          Import-Module Pester -RequiredVersion 3.4.0
+          Invoke-Pester tests -EnableExit
+
+      - name: Run Node tests
+        run: node --test

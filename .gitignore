@@ -1,0 +1,22 @@
+# OS/editor cruft
+Thumbs.db
+.DS_Store
+*.swp
+
+# Scratch/test files, if anyone runs local tests inside the repo
+*.local.json
+/scratch/
+
+# Working plan documents (design/implementation plans reviewed before
+# coding) - local-only on purpose, never meant to ship with the repo
+/plans/
+
+# Machine-specific Claude Code settings. The project instructions live in
+# .claude/ (not at the repository root) so the plugin directory does not read
+# them as plugin context.
+/.claude/*
+!/.claude/CLAUDE.md
+
+# PowerShell writes this analysis cache into the current folder when its profile
+# location is unusual; it is never part of the plugin.
+/Microsoft/
