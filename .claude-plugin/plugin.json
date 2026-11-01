@@ -7,5 +7,9 @@
   },
   "homepage": "https://github.com/maurorusso/sapi-voice-kit",
   "repository": "https://github.com/maurorusso/sapi-voice-kit",
+  "documentationUrl": "https://github.com/maurorusso/sapi-voice-kit#readme",
+  "privacyPolicyUrl": "https://github.com/maurorusso/sapi-voice-kit/blob/main/README.md#privacidad-qu%C3%A9-se-guarda-en-disco-y-cu%C3%A1ndo",
+  "supportUrl": "https://github.com/maurorusso/sapi-voice-kit/issues",
+  "termsOfServiceUrl": "https://github.com/maurorusso/sapi-voice-kit/blob/main/LICENSE",
   "license": "MIT"
 }
