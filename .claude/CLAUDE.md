@@ -1,98 +1,100 @@
-# sapi-voice-kit — project context
+# sapi-voice-kit — contexto del proyecto
 
-## Goal
+## Objetivo
 
-Let someone use Claude Code by voice: instead of reading the answer on screen, hear it — the *complete* content of the response, rephrased so it is clear and natural when heard. Not a mechanical truncation and not an ultra-short summary. Built for people who find reading on screen hard, or who prefer to listen.
+Que alguien pueda usar Claude Code con la voz: en vez de leer la respuesta en pantalla, escucharla. Se escucha el contenido *completo* de la respuesta, reformulado para que se entienda claro y natural al oído. No es un recorte mecánico ni un resumen ultracorto. Está hecho para quien tiene dificultad para leer en pantalla o prefiere escuchar.
 
-Native Windows speech only: no API keys, no Python, no installer.
+Solo usa la voz nativa de Windows: sin claves de API, sin Python, sin instalador.
 
-## Invariants — keep these true in any change
+## Invariantes: tienen que seguir siendo ciertas en cualquier cambio
 
-- The response on screen is never changed. The voice path is entirely separate from what is displayed.
-- What is spoken is a faithful, complete rendering of the answer, not a shortened stand-in (code blocks become a short placeholder and runs of hundreds of ASCII characters with no space, such as a base64 blob, are dropped; `summary` mode, whose purpose is a condensed version, is the one exception).
-- Nothing readable is written to disk by default: no logs, no copy of what was spoken. Only `config.json` and a bare timestamp (`.last-active-speech`). Spoken text travels through memory (stdin/stdout), never through a temp file.
-- Every `.ps1` and `.psd1` under `scripts/` is saved as UTF-8 **with BOM**: Windows PowerShell 5.1 misreads accents without one. `tests/common.Tests.ps1` enforces it.
-- The plugin's own code passes tool arguments to PowerShell only as discrete `spawn` arguments, and text only through stdin or a single-quoted heredoc, never by string concatenation into a shell command. The two voice commands a skill has the model run take a value only after it checks it is an installed voice name or a language code.
-- The plugin has no runtime dependencies. Pester 3.4 (bundled with Windows PowerShell 5.1) and `node:test` are dev-only.
+- La respuesta en pantalla nunca se modifica. El camino de la voz está totalmente separado de lo que se muestra.
+- Lo que se dice es una versión fiel y completa de la respuesta, no un sustituto recortado. Los bloques de código pasan a ser un aviso corto, y se descartan las tiras de cientos de caracteres ASCII sin espacios, como un bloque en base64. La única excepción es el modo `summary`, cuyo propósito es dar una versión resumida.
+- Por defecto no se escribe en disco nada legible: ni logs ni copias de lo que se dijo. Solo `config.json` y una marca de tiempo sin contenido (`.last-active-speech`). El texto hablado viaja por memoria (stdin/stdout), nunca por un archivo temporal.
+- Todo `.ps1` y `.psd1` dentro de `scripts/` se guarda en UTF-8 **con BOM**: sin él, Windows PowerShell 5.1 lee mal los acentos. `tests/common.Tests.ps1` lo comprueba.
+- El código del plugin pasa los argumentos de las herramientas a PowerShell solo como argumentos separados de `spawn`, y el texto solo por stdin o por un heredoc con comillas simples, nunca concatenándolo en un comando de shell. Los dos comandos de voz que una skill le hace correr al modelo aceptan un valor solo después de comprobar que es el nombre de una voz instalada o un código de idioma.
+- El plugin no tiene dependencias en tiempo de ejecución. Pester 3.4 (incluido en Windows PowerShell 5.1) y `node:test` son solo para desarrollo.
 
-## Layout
+## Estructura
 
 ```
-.claude-plugin/        plugin.json, marketplace.json (this repo is its own marketplace)
-hooks/hooks.json       Stop hook (speak.ps1) and UserPromptSubmit hook (prompt-active-mode.ps1)
-.mcp.json              registers the MCP server for Claude Code sessions
-mcp-server/            Cowork's way in: server.js (wiring), protocol.js, tools.js, powershell.js
-scripts/               entry points: speak, say, say-test, self-test, prompt-active-mode, list-voices, set-*
-scripts/common.ps1     loads scripts/lib/
-scripts/lib/           one concern per file; see ARCHITECTURE.md for the table
-skills/                slash commands (voice, mode, mute, debug, test, selftest), read-last, cowork
-tests/                 Pester (PowerShell library and entry scripts) and node:test (MCP server, repo integrity)
+.claude-plugin/        plugin.json, marketplace.json (este repo es su propio marketplace)
+hooks/hooks.json       hook Stop (speak.ps1) y hook UserPromptSubmit (prompt-active-mode.ps1)
+.mcp.json              registra el servidor MCP para las sesiones de Claude Code
+mcp-server/            la entrada de Cowork: server.js (conexiones), protocol.js, tools.js, powershell.js
+scripts/               puntos de entrada: speak, say, say-test, self-test, prompt-active-mode, list-voices, set-*
+scripts/common.ps1     carga scripts/lib/
+scripts/lib/           un tema por archivo; la tabla está en ARCHITECTURE.md
+skills/                comandos (voice, mode, mute, debug, test, selftest), read-last, cowork
+tests/                 Pester (biblioteca y scripts de entrada de PowerShell) y node:test (servidor MCP, integridad del repo)
 ```
 
-## Reading modes
+## Modos de lectura
 
-The Stop hook receives `last_assistant_message` and acts on `mode` from `config.json`:
+El hook Stop recibe `last_assistant_message` y actúa según el `mode` de `config.json`:
 
-- **natural** (default): the whole response with markdown removed and code blocks replaced by a placeholder (`Get-CleanedText`).
-- **literal**: the whole response exactly as written.
-- **summary**: a short summary from a separate `claude -p --safe-mode --tools "" --no-session-persistence --model haiku` call (no tools, and no transcript of the response saved on the user's disk). About 20 s of silence, so opt-in; falls back to natural if the call fails.
-- **active**: the model speaks a short paraphrase itself, mid-turn, by piping it to `say.ps1`; the Stop hook stays silent so audio never doubles. In the CLI a UserPromptSubmit hook reminds the model each turn (Claude Code asks for permission once per session); the command is a Bash heredoc, so it needs the Bash tool. In Cowork, which fires no plugin hooks, `skills/cowork` reminds it to call the `read_aloud` MCP tool.
+- **natural** (por defecto): la respuesta entera, sin el markdown y con los bloques de código reemplazados por un aviso (`Get-CleanedText`).
+- **literal**: la respuesta entera, tal como está escrita.
+- **summary**: un resumen corto que sale de una llamada aparte a `claude -p --safe-mode --tools "" --no-session-persistence --model haiku` (sin herramientas, y sin guardar en el disco del usuario una transcripción de la respuesta). Son unos 20 s de silencio, por eso hay que elegirlo a propósito; si la llamada falla, se usa natural.
+- **active**: el modelo dice él mismo una paráfrasis corta, durante el turno, pasándosela a `say.ps1`; el hook Stop no habla, así el audio nunca se duplica. En la CLI, un hook UserPromptSubmit se lo recuerda al modelo en cada turno (Claude Code pide permiso una vez por sesión); el comando es un heredoc de Bash, así que necesita la herramienta Bash. En Cowork, que no dispara los hooks de los plugins, `skills/cowork` le recuerda que llame a la herramienta MCP `read_aloud`.
 
-`muted` pauses automatic reading without losing the mode. `read-last` ("leeme eso") reads one response on demand through `say.ps1 -Force`, which ignores mute.
+`muted` pausa la lectura automática sin perder el modo. `read-last` ("leeme eso") lee una respuesta cuando se pide, a través de `say.ps1 -Force`, que ignora el silencio.
 
-## Config
+## Configuración
 
-One fixed folder per Windows user, shared by every install: `%USERPROFILE%\.claude\plugins\data\sapi-voice-kit-shared\`. `config.json` holds two independent sections:
+Una carpeta fija por usuario de Windows, compartida por todas las instalaciones: `%USERPROFILE%\.claude\plugins\data\sapi-voice-kit-shared\`. `config.json` tiene dos secciones independientes:
 
-- `local`: everything started by Claude Code's hooks. The CLI and Desktop's Code tab fire identical hooks, so the plugin cannot tell them apart and they share it.
-- `cowork`: everything arriving through the MCP server, the only way Cowork reaches the plugin.
+- `local`: todo lo que arrancan los hooks de Claude Code. La CLI y la pestaña Code de Desktop disparan los mismos hooks, así que el plugin no puede distinguirlas y comparten esta sección.
+- `cowork`: todo lo que llega por el servidor MCP, que es la única forma en que Cowork llega al plugin.
 
-`SAPI_VOICE_DATA_DIR`, when set, replaces that folder: the tests and `/sapi-voice-kit:selftest` use it to work in a throwaway directory without touching the real settings, and the MCP server forwards it to its scripts. The section is chosen by `SAPI_VOICE_NAMESPACE` (the MCP server sets `cowork` when it spawns a script; default `local`). Reads and writes go through a named mutex (`Local\SapiVoiceKitConfig`); writes are temp-file-and-rename. Speech uses its own mutex (`Local\SapiVoiceKitSpeak`) so parallel sessions take turns instead of talking over each other; the debug log has a third (`Local\SapiVoiceKitLog`) that is best effort. The duplicate-speech guard is deliberately **not** per-namespace: it exists to deduplicate across them.
+`SAPI_VOICE_DATA_DIR`, si está definida, reemplaza esa carpeta: los tests y `/sapi-voice-kit:selftest` la usan para trabajar en una carpeta descartable sin tocar la configuración real, y el servidor MCP se la pasa a sus scripts. La sección la elige `SAPI_VOICE_NAMESPACE` (el servidor MCP pone `cowork` cuando lanza un script; por defecto es `local`). Las lecturas y escrituras pasan por un mutex con nombre (`Local\SapiVoiceKitConfig`); para escribir se usa un archivo temporal que después se renombra. La voz usa su propio mutex (`Local\SapiVoiceKitSpeak`) para que las sesiones en paralelo hablen por turnos en vez de pisarse; el log de depuración tiene un tercero (`Local\SapiVoiceKitLog`), que no es estricto. La protección contra hablar dos veces **no** es por sección, a propósito: existe justamente para evitar duplicados entre ellas.
 
-## Voices
+## Voces
 
-`Get-InstalledVoices` merges OneCore (modern Windows 11 voices, listed first so they win automatic selection) and SAPI5 (classic, on every Windows). A configured voice name or language is matched against that one list. If a voice fails, `Invoke-SpeechSynthesis` falls back: OneCore → SAPI5 voice for the language → SAPI5 default.
+`Get-InstalledVoices` junta las voces OneCore (las modernas de Windows 11, listadas primero para que ganen en la elección automática) y las SAPI5 (clásicas, presentes en todo Windows). El nombre de voz o el idioma configurado se busca en esa única lista. Si una voz falla, `Invoke-SpeechSynthesis` prueba en este orden: OneCore → voz SAPI5 del idioma → voz SAPI5 por defecto.
 
-Technical terms (git, commit, hook, ...) get IPA pronunciations on the *same* voice, from the dictionary of the language that voice speaks: `scripts/lib/pronunciations/<code>.psd1` (today only `es.psd1`, used for every Spanish voice, es-ES, es-MX, ...). A voice in a language with no file gets no hints, because IPA written for Spanish is wrong for another language. To support another language, add its file; nothing else changes. Words the voices stress wrongly even with IPA are respelled instead (`scripts/lib/respellings/<code>.psd1`, e.g. `natural` -> `naturál`: the written accent is honored where the IPA stress mark is not; the screen text is untouched). Both are skipped in literal mode. The rules for adding entries are at the top of each file. Check changes with `/sapi-voice-kit:test` by ear.
+Los términos técnicos (git, commit, hook, ...) reciben pronunciaciones en IPA con la *misma* voz, tomadas del diccionario del idioma de esa voz: `scripts/lib/pronunciations/<código>.psd1` (hoy solo existe `es.psd1`, que se usa para todas las voces en español: es-ES, es-MX, ...). Una voz en un idioma sin archivo no recibe ayudas, porque el IPA escrito para español está mal para otro idioma. Para sumar un idioma, se agrega su archivo; no cambia nada más. Las palabras que las voces acentúan mal aun con IPA se reescriben (`scripts/lib/respellings/<código>.psd1`, por ejemplo `natural` -> `naturál`: la voz respeta la tilde escrita y no la marca de acento del IPA; el texto en pantalla no cambia). Las dos cosas se omiten en el modo literal. Las reglas para agregar entradas están al principio de cada archivo. Los cambios se comprueban de oído con `/sapi-voice-kit:test`.
 
 ## Cowork
 
-Plugin hooks do not fire in Cowork, and its own shell tool is a remote Linux sandbox with no PowerShell, so the MCP server is how the plugin speaks and is configured there. It exposes `read_aloud`, `set_mode`, `set_mute`, `set_voice`, `list_voices`, `say_test`, `set_debug`; each runs one script and returns its output. `read_aloud` passes `-RequireMode active` to `say.ps1`, so the mode check lives in one place.
+En Cowork no se disparan los hooks de los plugins, y su propia herramienta de shell es un entorno Linux remoto sin PowerShell, así que ahí el plugin habla y se configura a través del servidor MCP. Este ofrece `read_aloud`, `set_mode`, `set_mute`, `set_voice`, `list_voices`, `say_test` y `set_debug`; cada una corre un script y devuelve lo que este imprime. `read_aloud` le pasa `-RequireMode active` a `say.ps1`, así el chequeo del modo está en un solo lugar.
 
-Whether Cowork registers the plugin's MCP server by itself is inconsistent: Anthropic documents that a user-installed plugin does not bring MCP servers, yet it has sometimes appeared. The README gives the one-time manual entry as a fallback; adding it when the server already registered duplicates it. Packaging the server as a `.mcpb` Desktop Extension does not help: anthropics/claude-code#26259 shows Cowork's VM only forwards `type: "sdk"` servers and drops stdio ones.
+Que Cowork registre solo el servidor MCP del plugin no es consistente: Anthropic documenta que un plugin instalado por el usuario no trae servidores MCP, pero a veces apareció igual. El README da la entrada manual, que se hace una sola vez, como alternativa; agregarla cuando el servidor ya se registró lo duplica. Empaquetar el servidor como extensión de Desktop `.mcpb` no ayuda: anthropics/claude-code#26259 muestra que la máquina virtual de Cowork solo reenvía servidores `type: "sdk"` y descarta los stdio.
 
-## Working on this repo
+## Trabajar en este repo
 
-- Tests: `powershell -NoProfile -Command "Import-Module Pester -RequiredVersion 3.4.0; Invoke-Pester tests"` and `node --test`. CI (`.github/workflows/test.yml`) runs both on every PR and push to `main`, on Windows, with Pester pinned to 3.4.0.
-- Audio quality cannot be asserted: run `/sapi-voice-kit:test` after touching `text-normalization.ps1` or a dictionary. Before approving a PR that touches speech, run `/sapi-voice-kit:selftest` (about 3 minutes, out loud): it checks with the output-level meter that every mode makes sound or stays silent as it should; whether it sounds right is still judged by ear.
-- Every change goes through a branch and a PR; the owner merges.
-- Release: bump `version` in `plugin.json` and both places in `marketplace.json` (`tests/repo.test.js` checks they agree; the MCP server reads the plugin's version from `plugin.json`).
+- Tests: `powershell -NoProfile -Command "Import-Module Pester -RequiredVersion 3.4.0; Invoke-Pester tests"` y `node --test`. El CI (`.github/workflows/test.yml`) corre los dos en cada PR y en cada push a `main`, en Windows, con Pester fijado en 3.4.0. `codeql.yml` analiza el servidor MCP; CodeQL no soporta PowerShell.
+- La calidad del audio no se puede comprobar con un test: después de tocar `text-normalization.ps1` o un diccionario, correr `/sapi-voice-kit:test`. Antes de aprobar un PR que toque la voz, correr `/sapi-voice-kit:selftest` (unos 3 minutos, en voz alta): con el medidor de nivel de salida comprueba que cada modo suene o se quede en silencio según corresponda; si suena bien se sigue juzgando de oído.
+- Todo cambio va en una rama y un PR; el dueño hace el merge.
+- Nueva versión: subir `version` en `plugin.json` y en los dos lugares de `marketplace.json` (`tests/repo.test.js` comprueba que coincidan; el servidor MCP lee la versión del plugin de `plugin.json`).
 
-## Decisions (what was tried and why it is the way it is)
+## Decisiones (qué se probó y por qué quedó así)
 
-- **A second voice for technical terms**: rejected. It works, but sounds like two people talking and doubles speaking time. IPA hints on one voice instead.
-- **The model appending a hidden `<!--voice-->` block to its answer**: rejected. A hook only sees what is already on screen; there is no hidden channel.
-- **A temp file for spoken text**: rejected, even a self-deleting one. Text goes through memory.
-- **Calling Cowork's shell tool to run `say.ps1`**: does not work (remote Linux sandbox). Hence the local MCP server.
-- **A fifth `cowork` mode value**: rejected. Cowork and the CLI are one behavior ("the model speaks") over two transports.
-- **The official MCP SDK**: rejected, to keep the plugin free of npm dependencies. The protocol surface needed is small.
-- **Two config sections (`local`, `cowork`), not one flat file**: the voice has to be able to differ in Cowork.
-- **Cleaning abbreviations/paths/URLs by regex for natural mode and in `say.ps1`, instruction to the model for summary/active/read-last**: the model path cannot be forced, so `say.ps1` also normalizes what it receives, and summary mode runs the model's summary through `Get-CleanedText` before speaking it.
-- **SSML `<prosody>` for rate or question intonation**: the OneCore voices ignore it. Rate uses `SpeechSynthesizer.Options.SpeakingRate`.
+- **Una segunda voz para los términos técnicos**: descartada. Funciona, pero suena a dos personas hablando y duplica el tiempo de lectura. En su lugar, ayudas en IPA con una sola voz.
+- **Que el modelo agregue un bloque oculto `<!--voice-->` a su respuesta**: descartado. Un hook solo ve lo que ya está en pantalla; no hay canal oculto.
+- **Un archivo temporal para el texto hablado**: descartado, aunque se borre solo. El texto va por memoria.
+- **Usar la herramienta de shell de Cowork para correr `say.ps1`**: no funciona (es un entorno Linux remoto). Por eso existe el servidor MCP local.
+- **Un quinto modo `cowork`**: descartado. Cowork y la CLI tienen un mismo comportamiento ("el modelo habla") por dos caminos distintos.
+- **El SDK oficial de MCP**: descartado, para que el plugin no dependa de npm. La parte del protocolo que hace falta es chica.
+- **Dos secciones de configuración (`local`, `cowork`) y no un archivo plano**: la voz tiene que poder ser distinta en Cowork.
+- **Limpiar abreviaturas, rutas y URLs con expresiones regulares en el modo natural y en `say.ps1`, y con instrucciones al modelo en summary, active y read-last**: no se puede obligar al modelo, así que `say.ps1` también normaliza lo que recibe, y el modo summary pasa el resumen del modelo por `Get-CleanedText` antes de decirlo.
+- **SSML `<prosody>` para la velocidad o la entonación de las preguntas**: las voces OneCore lo ignoran. La velocidad usa `SpeechSynthesizer.Options.SpeakingRate`.
+- **Publicar en el directorio de plugins de Anthropic**: bloqueado por la política, que acepta hooks de tipo comando y servidores MCP locales solo de organizaciones verificadas, y el plugin necesita las dos cosas. Se distribuye desde este repositorio, que es su propio marketplace.
+- **Que el plugin revise sus propios archivos**: descartado. El chequeo estaría en la misma carpeta que revisa, así que quien pueda cambiar los archivos también puede cambiar el chequeo, y una falsa alarma podría dejar sin audio a alguien que depende de él.
 
-## Known limitations
+## Limitaciones conocidas
 
-- Spanish questions get weak rising intonation on every Microsoft Spanish voice, SAPI5 or OneCore, and no SSML changes that. A neural cloud voice would fix it at the cost of API keys and internet, which this project exists to avoid.
-- The voices have no /ʃ/ ("sh") sound: "push" is spoken as "pus". The dictionary entry is still better than none.
-- Cowork's plugin screen can show a stale version, and a restart does not refresh it.
-- In active mode in Cowork, speaking depends on the model invoking the skill every turn.
-- `.mcp.json` starts `node` by name, and the hooks and skills start `powershell` by name, so a `powershell.exe` planted in the folder a hook runs from would be found first on `cmd.exe`; only the MCP server uses the full System32 path.
-- A file name with several dots (`common.Tests.ps1`, `app.module.ts`) is read as its last two parts and keeps the folders in front of it: the file-name pattern's name part cannot contain dots, and allowing them made the pattern far too slow on long dotted words. Paths with spaces (`C:\Program Files\App\run.exe`) are not parsed, so a word before the first space is left in; a file name glued to Chinese, Japanese or Thai text with no punctuation between them is left as written (`\b` finds no boundary there); and `chart.js/package.json` reads as a list, because it has the same shape as `README.md/other.md`. Capitalized folders in front of a capitalized `.js` file name (`Models/User.js`) are kept, because that shape matches a technology list (`MongoDB/Express/Node.js`).
-- Text written without spaces (Chinese, Japanese, Korean, Thai) glued to a Windows drive path with no punctuation between them is read as part of the path: after `C:\` a folder name may be in any script, because user names are. Two URLs joined by a comma with no space (`https://a.com,https://b.com`) are read as one link. A drive-path folder name with a comma, a semicolon, a backtick, an unbalanced parenthesis or a typographic dash, quote or guillemet (valid on Windows, `C:\Users\Smith,John`) ends the folder at that character, because those characters are what tell two joined paths apart.
-- A comment or a link inside a span written with two backticks (` ``<!-- x -->`` `) is treated as outside code: the pair of backticks that opens the span reads as an empty span.
-- Markdown that is ambiguous or malformed can still read some code aloud or lose a line: a mention of three backticks at the end of a line pairs with the next bare closing line (the sentence "Do this: ```" followed by code and a closing fence reads as one fence, which is what that shape usually means); a fence that is never closed is read as text; the unindented body of a fence opened after a list marker ends with its list item; a thematic break written `- - -`, an empty checkbox `[ ]` and a line that starts with a year and a period (`2024. text`, read as a list item) are spoken as written or lose that start. A quote marker is removed at any indent, so a line that starts with `>=` loses its `>`, as Markdown reads it.
-- A natural-mode answer longer than about 15,000 characters is cut off when the Stop hook's 900 s timeout runs out (a Spanish voice speaks about 17 characters per second).
-- The modern (OneCore) voices synthesize the whole text before playing anything, so a long answer starts after a delay (about 5 s for 10,000 characters), and past roughly 65,000 characters the 30 s wait runs out and the text is read again with a classic voice.
-- A long `read_aloud` holds the MCP server's queue until it finishes speaking, so `set_mute` waits behind it.
-- In active mode the spoken paraphrase is part of the Claude session transcript, which the plugin does not control.
-- If the MCP server is registered both by the plugin and by a manual entry in `claude_desktop_config.json`, Claude Code sessions see two `read_aloud` tools; the duplicate-speech guard absorbs the double call.
+- Las preguntas en español tienen una entonación ascendente débil en todas las voces en español de Microsoft, SAPI5 u OneCore, y ningún SSML lo cambia. Una voz neuronal en la nube lo resolvería, a costa de claves de API e internet, que es justo lo que este proyecto existe para evitar.
+- Las voces no tienen el sonido /ʃ/ ("sh"): "push" se dice "pus". Igual, la entrada del diccionario es mejor que nada.
+- La pantalla de plugins de Cowork puede mostrar una versión vieja, y reiniciar no la actualiza.
+- En el modo active en Cowork, que hable depende de que el modelo use la skill en cada turno.
+- `.mcp.json` arranca `node` por nombre, y los hooks y las skills arrancan `powershell` por nombre. Los hooks corren con Git Bash o PowerShell, y ninguno de los dos busca programas en la carpeta actual. El `spawn` de Node sí lo hace, así que si Claude Code arranca el servidor MCP de esa forma desde la carpeta del proyecto (no está confirmado), correría un `node.exe` que ya estuviera en esa carpeta. `node` no tiene una ruta completa fija; solo las llamadas a PowerShell del propio servidor MCP usan la ruta completa de System32.
+- Un nombre de archivo con varios puntos (`common.Tests.ps1`, `app.module.ts`) se lee como sus dos últimas partes y conserva las carpetas de adelante: la parte del nombre en el patrón de archivos no puede tener puntos, y permitirlos hacía el patrón demasiado lento con palabras largas llenas de puntos. Las rutas con espacios (`C:\Program Files\App\run.exe`) no se reconocen, así que queda una palabra antes del primer espacio; un nombre de archivo pegado a texto en chino, japonés o tailandés sin puntuación en el medio queda como está escrito (`\b` no encuentra un límite ahí); y `chart.js/package.json` se lee como una lista, porque tiene la misma forma que `README.md/other.md`. Las carpetas con mayúscula delante de un archivo `.js` con mayúscula (`Models/User.js`) se conservan, porque esa forma coincide con una lista de tecnologías (`MongoDB/Express/Node.js`).
+- Un texto escrito sin espacios (chino, japonés, coreano, tailandés) pegado a una ruta de Windows con unidad, sin puntuación en el medio, se lee como parte de la ruta: después de `C:\`, el nombre de una carpeta puede estar en cualquier alfabeto, porque los nombres de usuario pueden estarlo. Dos URLs unidas por una coma sin espacio (`https://a.com,https://b.com`) se leen como un solo link. Si el nombre de una carpeta en una ruta con unidad tiene una coma, un punto y coma, un acento grave, un paréntesis sin cerrar o un guion, comilla o comilla angular tipográficos (válidos en Windows, `C:\Users\Smith,John`), la carpeta termina en ese carácter, porque esos caracteres son los que permiten separar dos rutas pegadas.
+- Un comentario o un link dentro de un fragmento escrito con dos acentos graves (` ``<!-- x -->`` `) se trata como si estuviera fuera del código: el par de acentos graves que lo abre se lee como un fragmento vacío.
+- Un Markdown ambiguo o mal escrito todavía puede hacer que se lea algo de código o que se pierda una línea: tres acentos graves mencionados al final de una línea se emparejan con la siguiente línea de cierre suelta (la frase "Hacé esto: ```" seguida de código y un cierre se lee como un solo bloque, que es lo que esa forma suele querer decir); un bloque que nunca se cierra se lee como texto; el contenido sin sangría de un bloque abierto después de un marcador de lista termina con ese elemento de la lista; un separador escrito `- - -`, una casilla vacía `[ ]` y una línea que empieza con un año y un punto (`2024. texto`, que se lee como elemento de lista) se dicen tal como están escritos o pierden ese comienzo. El marcador de cita se quita con cualquier sangría, así que una línea que empieza con `>=` pierde su `>`, igual que como lo lee Markdown.
+- En el modo natural, una respuesta de más de unos 15.000 caracteres se corta cuando se agota el tiempo límite de 900 s del hook Stop (una voz en español dice unos 17 caracteres por segundo).
+- Las voces modernas (OneCore) generan todo el audio antes de empezar a reproducir, así que una respuesta larga arranca con demora (unos 5 s para 10.000 caracteres), y pasados unos 65.000 caracteres se agota la espera de 30 s y el texto se vuelve a leer con una voz clásica.
+- Un `read_aloud` largo ocupa la cola del servidor MCP hasta que termina de hablar, así que `set_mute` espera detrás.
+- En el modo active, la paráfrasis hablada queda en la transcripción de la sesión de Claude, que el plugin no controla.
+- Si el servidor MCP está registrado por el plugin y además por una entrada manual en `claude_desktop_config.json`, las sesiones de Claude Code ven dos herramientas `read_aloud`; la protección contra hablar dos veces absorbe la llamada doble.
